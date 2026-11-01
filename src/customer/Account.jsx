@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import Button from "../components/GlassButton.jsx";
 import { newId } from "./store.js";
+import { detectAddress, mapEmbedUrl } from "./location.js";
 import { Heading, Address } from "./shared.jsx";
 const addressFields = [
   ["label", "Address label"],
@@ -14,6 +15,20 @@ const addressFields = [
 ];
 export function AddressBook({ state, update, selected, select, notify }) {
   const [editing, setEditing] = useState(null);
+  const [locating, setLocating] = useState(false);
+  const formRef = useRef(null);
+  async function useMyLocation() {
+    setLocating(true);
+    try {
+      const typed = Object.fromEntries(new FormData(formRef.current));
+      const found = await detectAddress();
+      setEditing({ ...editing, ...typed, ...found, nonce: Date.now() });
+      notify("Location found. Please check the details below.");
+    } catch (e) {
+      notify(e.message);
+    }
+    setLocating(false);
+  }
   function save(e) {
     e.preventDefault();
     const a = {
@@ -72,8 +87,26 @@ export function AddressBook({ state, update, selected, select, notify }) {
         </div>
       ))}
       {editing && (
-        <form key={editing.id || "new"} onSubmit={save} className="cu-form">
+        <form
+          ref={formRef}
+          key={`${editing.id || "new"}-${editing.nonce || 0}`}
+          onSubmit={save}
+          className="cu-form"
+        >
           <h3>{editing.id ? "Edit address" : "New address"}</h3>
+          <Button onClick={useMyLocation} disabled={locating}>
+            {locating ? "Finding you…" : "📍 Use my current location"}
+          </Button>
+          <input type="hidden" name="lat" defaultValue={editing.lat || ""} />
+          <input type="hidden" name="lng" defaultValue={editing.lng || ""} />
+          {editing.lat && (
+            <iframe
+              className="cu-map"
+              title="Your location on the map"
+              loading="lazy"
+              src={mapEmbedUrl(editing.lat, editing.lng)}
+            />
+          )}
           {addressFields.map(([key, label]) => (
             <label key={key}>
               {label}

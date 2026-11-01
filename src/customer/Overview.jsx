@@ -113,7 +113,9 @@ export function Overview({ state, add }) {
         <Link to="/customer/shop">Browse all →</Link>
       </div>
       <div className="cu-grid">
-        {[products[0], products[8], products[18], products[16]].map((p) => (
+        {[products[0], products[8], products[18], products[16]]
+          .filter(Boolean)
+          .map((p) => (
           <ProductCard {...{ p, add }} key={p.id} />
         ))}
       </div>

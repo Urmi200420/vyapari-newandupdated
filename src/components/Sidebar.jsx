@@ -52,10 +52,10 @@ export default function Sidebar({ active, onSelect, counts, open, onClose, onCro
 
         <div className="side-foot">
           <p className="guest-tag">👤 Browsing as guest</p>
-          <GlassButton to="/login" variant="solid" block onClick={onClose}>
+          <GlassButton to="/customer" variant="solid" block onClick={onClose}>
             Log in
           </GlassButton>
-          <GlassButton to="/login?mode=signup" block onClick={onClose}>
+          <GlassButton to="/customer" block onClick={onClose}>
             Create account
           </GlassButton>
         </div>

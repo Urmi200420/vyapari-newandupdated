@@ -8,9 +8,11 @@ import {
 export const newId = () =>
   globalThis.crypto?.randomUUID?.() ||
   `${Date.now().toString(36)}-${Array.from(globalThis.crypto?.getRandomValues?.(new Uint32Array(2)) || [Math.random() * 1e9, Math.random() * 1e9], (n) => Math.floor(n).toString(36)).join("")}`;
+// Set to false later to bring the Guest / Login demo back.
+export const BYPASS_LOGIN = true;
 export const storageKey = "vyapari_customer_v1";
 export const freshState = () => ({
-  mode: "guest",
+  mode: BYPASS_LOGIN ? "registered" : "guest",
   profile: { ...initialProfile },
   addresses: [{ ...initialAddress }],
   cart: [],
@@ -28,7 +30,7 @@ export function loadState() {
       ) &&
       saved.profile
     )
-      return saved;
+      return BYPASS_LOGIN ? { ...saved, mode: "registered" } : saved;
   } catch {}
   return freshState();
 }
@@ -62,10 +64,11 @@ export function addItem(state, id, amount = 1) {
     throw Error("Requested quantity exceeds available stock.");
   return {
     ...state,
-    cart: [
-      ...state.cart.filter((c) => c.id !== id),
-      { id, quantity: current + amount },
-    ],
+    cart: state.cart.some((c) => c.id === id)
+      ? state.cart.map((c) =>
+          c.id === id ? { ...c, quantity: current + amount } : c,
+        )
+      : [...state.cart, { id, quantity: amount }],
   };
 }
 export function placeOrder(state, addressId) {

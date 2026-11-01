@@ -9,7 +9,13 @@ import {
 } from "react-router-dom";
 import Button from "../components/GlassButton.jsx";
 import { products, categories } from "./data.js";
-import { loadState, storageKey, addItem, placeOrder } from "./store.js";
+import {
+  loadState,
+  storageKey,
+  addItem,
+  placeOrder,
+  BYPASS_LOGIN,
+} from "./store.js";
 import { Heading, Empty } from "./shared.jsx";
 import { Shop, ProductDetails } from "./Catalog.jsx";
 import { Cart, Checkout } from "./Shopping.jsx";
@@ -136,7 +142,7 @@ export default function Customer() {
         <div className="cu-side-foot">
           <p className="cu-muted">Frontend demo · No real purchases</p>
           <Button to="/">Back to homepage</Button>
-          {registered && (
+          {registered && !BYPASS_LOGIN && (
             <Button
               onClick={() => {
                 setState((s) => ({ ...s, mode: "guest" }));
@@ -166,6 +172,7 @@ export default function Customer() {
             ☰
           </button>
           <span>Customer {registered ? "dashboard" : "store"}</span>
+          {!BYPASS_LOGIN && (
           <label className="cu-mode">
             Demo mode
             <select
@@ -179,7 +186,12 @@ export default function Customer() {
               <option value="registered">Registered User</option>
             </select>
           </label>
-          <Link to="/customer/cart" className="btn glass">
+          )}
+          <Link
+            to="/customer/cart"
+            className="btn glass"
+            style={{ marginLeft: "auto" }}
+          >
             Cart (
             {registered ? state.cart.reduce((n, c) => n + c.quantity, 0) : 0})
           </Link>

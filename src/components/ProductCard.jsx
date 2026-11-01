@@ -5,7 +5,7 @@ export default function ProductCard({ product }) {
   const navigate = useNavigate();
 
   // Guests can look but need an account to buy
-  const requireLogin = () => navigate("/login?next=cart");
+  const requireLogin = () => navigate("/customer/shop");
 
   const sellingPrice = product.price;
   const mrp = product.mrp || Math.round(sellingPrice * 1.35);

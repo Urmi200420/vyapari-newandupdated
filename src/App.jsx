@@ -8,6 +8,7 @@ import SellerDashboard from "./pages/SellerDashboard.jsx";
 import SellerLanding from "./pages/SellerLanding.jsx";
 import DeliveryDashboard from "./pages/DeliveryDashboard.jsx";
 import { startSmoothScroll, scrollToTop } from "./smoothScroll.js";
+import Customer from "./customer/Customer.jsx";
 
 export default function App() {
   const { pathname } = useLocation();
@@ -47,6 +48,7 @@ export default function App() {
           <Route path="/delivery/dashboard" element={<DeliveryDashboard />} />
           <Route path="/delivery-dashboard" element={<DeliveryDashboard />} />
           <Route path="/delivery" element={<DeliveryDashboard />} />
+          <Route path="/customer/*" element={<Customer />} />
         </Routes>
       )}
     </>

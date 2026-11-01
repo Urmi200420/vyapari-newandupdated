@@ -85,7 +85,7 @@ export const money = (n) =>
 export const delivery = (subtotal) =>
   subtotal === 0 || subtotal >= 999 ? 0 : 49;
 export const seedOrders = stages.map((status, i) => {
-  const p = products[i + 12];
+  const p = products[(i + 12) % products.length];
   return {
     id: `VYP-DEMO-100${i}`,
     date: new Date(2026, 9, 25 - i).toISOString(),
