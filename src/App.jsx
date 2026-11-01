@@ -1,4 +1,3 @@
-import Customer from "./customer/Customer";
 import { useEffect, useState } from "react";
 import { Routes, Route, useLocation } from "react-router-dom";
 import Intro from "./components/Intro.jsx";
@@ -48,7 +47,6 @@ export default function App() {
           <Route path="/delivery/dashboard" element={<DeliveryDashboard />} />
           <Route path="/delivery-dashboard" element={<DeliveryDashboard />} />
           <Route path="/delivery" element={<DeliveryDashboard />} />
-          <Route path="/customer/*" element={<Customer />} />
         </Routes>
       )}
     </>

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import Sidebar from "../components/Sidebar.jsx";
 import GlassButton from "../components/GlassButton.jsx";
 import ProductCard from "../components/ProductCard.jsx";
@@ -22,7 +22,6 @@ const vibes = [
 
 
 export default function Home() {
-  const navigate = useNavigate();
   const [active, setActive] = useState("all");
   const [query, setQuery] = useState("");
   const [menuOpen, setMenuOpen] = useState(false); // phone: sidebar sheet open
@@ -70,7 +69,7 @@ export default function Home() {
     if (row) row.scrollBy({ left: dir * row.clientWidth * 0.8, behavior: "smooth" });
   };
 
-  const jumpToShop = () => navigate("/customer");
+  const jumpToShop = () => scrollToElement(document.getElementById("shop"));
   const pickCategory = (id) => {
     setActive(id);
     jumpToShop();
