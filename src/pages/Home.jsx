@@ -3,7 +3,8 @@ import { Link } from "react-router-dom";
 import Sidebar from "../components/Sidebar.jsx";
 import GlassButton from "../components/GlassButton.jsx";
 import ProductCard from "../components/ProductCard.jsx";
-import { categories, products } from "../data.js";
+import { categories, products } from "../customer/data.js";
+import { useCustomer } from "../customer/CustomerContext.jsx";
 import { scrollToElement } from "../smoothScroll.js";
 
 // If an image file is missing, hide the broken icon and show the label instead
@@ -22,6 +23,8 @@ const vibes = [
 
 
 export default function Home() {
+  const { state, storageError } = useCustomer();
+  const cartCount = state.mode === "registered" ? state.cart.reduce((sum, line) => sum + line.quantity, 0) : 0;
   const [active, setActive] = useState("all");
   const [query, setQuery] = useState("");
   const [menuOpen, setMenuOpen] = useState(false); // phone: sidebar sheet open
@@ -113,6 +116,7 @@ export default function Home() {
             }}
           />
           <nav className="top-links">
+            <GlassButton to="/customer/cart" aria-label={`Cart (${cartCount})`}>Cart ({cartCount})</GlassButton>
             <Link to="/seller" className="text-link">
               Sell on Vyapari
             </Link>
@@ -122,6 +126,7 @@ export default function Home() {
           </nav>
         </header>
 
+        {storageError && <p role="alert">Browser storage is unavailable. Cart changes will last only for this visit.</p>}
         {/* hero tile */}
         <section className="hero panel">
           <div className="hero-copy">

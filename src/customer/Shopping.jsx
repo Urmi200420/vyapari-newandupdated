@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import Button from "../components/GlassButton.jsx";
-import { money } from "./data.js";
+import { money, sellers } from "./data.js";
 import { cartLines, totals, addItem } from "./store.js";
 import { Heading, Empty, Summary } from "./shared.jsx";
 import { AddressBook } from "./Account.jsx";
@@ -28,6 +28,7 @@ export function Cart({ state, update, notify }) {
                   <h3>{p.name}</h3>
                 </Link>
                 <p>{money(p.price)} each</p>
+                <small>Sold by {sellers.find(s => s.id === p.sellerId)?.name || "Vyapari seller"}</small>
                 <div className="cu-actions">
                   <Button
                     aria-label={`Decrease ${p.name}`}

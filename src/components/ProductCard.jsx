@@ -1,11 +1,8 @@
-import { useNavigate } from "react-router-dom";
+import { useCustomer } from "../customer/CustomerContext.jsx";
 import { formatPrice } from "../data.js";
 
 export default function ProductCard({ product }) {
-  const navigate = useNavigate();
-
-  // Guests can look but need an account to buy
-  const requireLogin = () => navigate("/customer/shop");
+  const { add } = useCustomer();
 
   const sellingPrice = product.price;
   const mrp = product.mrp || Math.round(sellingPrice * 1.35);
@@ -37,8 +34,8 @@ export default function ProductCard({ product }) {
           </span>
         </div>
 
-        <button className="btn btn-solid block" onClick={requireLogin}>
-          Add to cart
+        <button className="btn btn-solid block" onClick={() => add(product.id)} disabled={!product.stock} aria-label={`Add ${product.name} to cart`}>
+          {product.stock ? "Add to cart" : "Out of stock"}
         </button>
       </div>
     </article>
