@@ -1,7 +1,27 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import GlassButton from "../components/GlassButton.jsx";
 
 const digits = (s, n) => new RegExp("^\\d{" + n + "}$").test(String(s || "").replace(/\s/g, ""));
+
+// Resize + convert a File to a base64 JPEG string (max 400 px, ~40 KB)
+function resizeToBase64(file, maxPx = 400) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const scale = Math.min(1, maxPx / Math.max(img.width, img.height));
+      const w = Math.round(img.width  * scale);
+      const h = Math.round(img.height * scale);
+      const canvas = document.createElement("canvas");
+      canvas.width = w; canvas.height = h;
+      canvas.getContext("2d").drawImage(img, 0, 0, w, h);
+      resolve(canvas.toDataURL("image/jpeg", 0.82));
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("Image could not be loaded.")); };
+    img.src = url;
+  });
+}
 
 export default function DeliveryProfile({ agent, onSave, onToggleDuty, reload }) {
   const [form, setForm] = useState({
@@ -16,7 +36,11 @@ export default function DeliveryProfile({ agent, onSave, onToggleDuty, reload })
     accountNumber: agent?.accountNumber || "",
     ifscCode: agent?.ifscCode || "",
     dutyStatus: agent?.dutyStatus ?? 1,
+    avatar: agent?.avatar || "",   // base64 JPEG or "" for no photo
   });
+
+  const fileRef   = useRef(null);
+  const [avatarErr, setAvatarErr] = useState("");
 
   const [pinInput, setPinInput] = useState("");
   const [pinError, setPinError] = useState("");
@@ -24,6 +48,30 @@ export default function DeliveryProfile({ agent, onSave, onToggleDuty, reload })
   const [msg, setMsg] = useState({ type: "", text: "" });
 
   const setField = (k, v) => setForm((f) => ({ ...f, [k]: v }));
+
+  // ── Avatar picker ────────────────────────────────────────────────────────
+  const handleAvatarChange = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setAvatarErr("");
+    if (!file.type.startsWith("image/")) {
+      return setAvatarErr("Please choose an image file (JPG, PNG, WEBP…).");
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      return setAvatarErr("Image must be under 5 MB.");
+    }
+    try {
+      const b64 = await resizeToBase64(file);
+      setField("avatar", b64);
+    } catch {
+      setAvatarErr("Could not read the image. Please try another file.");
+    }
+  };
+
+  const removeAvatar = () => {
+    setField("avatar", "");
+    if (fileRef.current) fileRef.current.value = "";
+  };
 
   const addPincode = () => {
     setPinError("");
@@ -93,14 +141,69 @@ export default function DeliveryProfile({ agent, onSave, onToggleDuty, reload })
         </div>
       </section>
 
+      {/* ── Profile Photo ─────────────────────────────────────────────── */}
+      <section className="panel">
+        <h2 className="stack-title small">
+          <em>Visible to customers &amp; admin</em>
+          <strong>Profile Photo</strong>
+        </h2>
+        <p className="dash-note left">
+          Your photo helps customers recognise you at the door and builds trust.
+          JPG / PNG / WEBP · max 5 MB · auto-resized to 400 px.
+        </p>
+
+        <div className="avatar-row">
+          {/* Preview circle */}
+          <div className="avatar-preview">
+            {form.avatar
+              ? <img src={form.avatar} alt="Profile preview" />
+              : <span className="avatar-placeholder">📷</span>
+            }
+          </div>
+
+          {/* Controls */}
+          <div className="avatar-controls">
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/*"
+              id="avatar-upload"
+              style={{ display: "none" }}
+              onChange={handleAvatarChange}
+            />
+            <GlassButton
+              type="button"
+              variant="glass"
+              onClick={() => fileRef.current?.click()}
+            >
+              {form.avatar ? "Change photo" : "Upload photo"}
+            </GlassButton>
+
+            {form.avatar && (
+              <GlassButton type="button" variant="ghost" onClick={removeAvatar}>
+                Remove
+              </GlassButton>
+            )}
+
+            {avatarErr && (
+              <p className="form-msg error" style={{ margin: "0.3rem 0 0" }}>{avatarErr}</p>
+            )}
+            {form.avatar && (
+              <p className="avatar-saved-note">
+                ✓ Photo ready — will be saved with your profile
+              </p>
+            )}
+          </div>
+        </div>
+      </section>
+
       {/* Account Info */}
       <section className="panel">
         <div className="dash-row between">
           <h2 className="stack-title small">
             <em>Identity credentials</em>
             <strong>Account Details</strong>
-          </h2>
-          <span className="pill" style={{ color: "#86efac" }}>
+          </h2>          <span className="pill" style={{ color: "#86efac" }}>
             Admin Status: {agent?.adminStatus || "APPROVED"}
           </span>
         </div>
@@ -202,9 +305,9 @@ export default function DeliveryProfile({ agent, onSave, onToggleDuty, reload })
                   }
                 }}
               />
-              <GlassButton type="button" className="btn btn-glass" onClick={addPincode}>
+              <button type="button" className="btn btn-glass" onClick={addPincode}>
                 + Add Area
-              </GlassButton>
+              </button>
             </div>
             {pinError && <p className="form-msg error" style={{ margin: "0.4rem 0" }}>{pinError}</p>}
 

@@ -20,16 +20,18 @@ import AvailablePool from "../d-dashboard/AvailablePool.jsx";
 import DeliveryHistory from "../d-dashboard/DeliveryHistory.jsx";
 import DeliveryWallet from "../d-dashboard/DeliveryWallet.jsx";
 import DeliveryProfile from "../d-dashboard/DeliveryProfile.jsx";
+import DeliveryTickets from "../d-dashboard/DeliveryTickets.jsx";
 
 import "../s-dashboard/dashboard.css";
 import "../d-dashboard/delivery.css";
 
 const TABS = [
-  { id: "active", icon: "🛵", label: "Active Deliveries", title: "Trip Execution" },
-  { id: "pool", icon: "📦", label: "Available Pool", title: "Available Shipments" },
-  { id: "history", icon: "📜", label: "Trip History", title: "Completed Runs" },
-  { id: "wallet", icon: "👛", label: "My Earnings & Wallet", title: "Delivery Wallet" },
-  { id: "profile", icon: "👤", label: "Courier Profile", title: "Service Profile & Areas" },
+  { id: "active",  icon: "🛵", label: "Active Deliveries",   title: "Trip Execution" },
+  { id: "pool",    icon: "📦", label: "Available Pool",       title: "Available Shipments" },
+  { id: "history", icon: "📜", label: "Trip History",         title: "Completed Runs" },
+  { id: "wallet",  icon: "👛", label: "My Earnings & Wallet", title: "Delivery Wallet" },
+  { id: "profile", icon: "👤", label: "Courier Profile",      title: "Service Profile & Areas" },
+  { id: "support", icon: "🎫", label: "Support",              title: "Raise a Ticket" },
 ];
 
 export default function DeliveryDashboard() {
@@ -240,6 +242,10 @@ export default function DeliveryDashboard() {
                 onToggleDuty={handleToggleDuty}
                 reload={loadData}
               />
+            )}
+
+            {currentTab.id === "support" && (
+              <DeliveryTickets riderName={data.agent?.name || ""} />
             )}
           </>
         )}

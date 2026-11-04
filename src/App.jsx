@@ -10,6 +10,7 @@ import DeliveryDashboard from "./pages/DeliveryDashboard.jsx";
 import { startSmoothScroll, scrollToTop } from "./smoothScroll.js";
 import Customer from "./customer/Customer.jsx";
 
+
 export default function App() {
   const { pathname } = useLocation();
 
