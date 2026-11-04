@@ -764,13 +764,66 @@
   }
 }
 /* The existing liquid-glass button style forces inline-flex. */
-.cu-topbar .cu-menu { display: none !important; }
-.cu-main .cu-mode { display: flex; }
-.cu-main h2 { overflow-wrap: anywhere; }
-@media (max-width: 900px) { .cu-topbar .cu-menu { display: inline-flex !important; } }
+.cu-topbar .cu-menu {
+  display: none !important;
+}
+.cu-main .cu-mode {
+  display: flex;
+}
+.cu-main h2 {
+  overflow-wrap: anywhere;
+}
+@media (max-width: 900px) {
+  .cu-topbar .cu-menu {
+    display: inline-flex !important;
+  }
+}
 .cu-map {
   width: 100%;
   height: 220px;
   border: 1px solid var(--line);
   border-radius: 16px;
+}
+.cu-complaint-images {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 16px;
+}
+.cu-complaint-images figure {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 12px;
+  background: var(--panel-2);
+}
+.cu-complaint-images img {
+  width: 100%;
+  height: 170px;
+  object-fit: contain;
+  border-radius: 12px;
+}
+.cu-complaint-images figcaption {
+  font-size: 12px;
+  margin-top: 8px;
+  overflow-wrap: anywhere;
+}
+.cu-complaint-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.cu-main input[type="file"]::file-selector-button {
+  font: inherit;
+  background: var(--cream);
+  color: var(--on-cream);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 8px 12px;
+  margin-right: 10px;
+  cursor: pointer;
+}
+/* Keep the existing homepage search usable alongside the added cart link. */
+@media (max-width: 600px) {
+  .home-topbar { flex-wrap: wrap; }
+  .home-topbar .search { flex: 1; min-width: 180px; }
+  .home-topbar .top-links { width: 100%; justify-content: flex-end; gap: 12px; }
 }

@@ -15,13 +15,16 @@ export const freshState = () => ({
   mode: BYPASS_LOGIN ? "registered" : "guest",
   profile: { ...initialProfile },
   addresses: [{ ...initialAddress }],
+  customerId: "vyapari-demo-customer",
+  complaints: [],
+  notifications: [],
   cart: [],
   orders: seedOrders,
   viewed: [],
 });
-export function loadState() {
+export function parseState(raw) {
   try {
-    const saved = JSON.parse(localStorage.getItem(storageKey));
+    const saved = JSON.parse(raw);
     if (
       saved &&
       ["guest", "registered"].includes(saved.mode) &&
@@ -29,10 +32,24 @@ export function loadState() {
         Array.isArray(saved[k]),
       ) &&
       saved.profile
-    )
-      return BYPASS_LOGIN ? { ...saved, mode: "registered" } : saved;
+    ) {
+      return {
+        ...saved,
+        mode: BYPASS_LOGIN ? "registered" : saved.mode,
+        customerId: saved.customerId || "vyapari-demo-customer",
+        complaints: Array.isArray(saved.complaints) ? saved.complaints : [],
+        notifications: Array.isArray(saved.notifications) ? saved.notifications : [],
+      };
+    }
   } catch {}
-  return freshState();
+  return null;
+}
+export function loadState() {
+  try {
+    return parseState(localStorage.getItem(storageKey)) || freshState();
+  } catch {
+    return freshState();
+  }
 }
 export function cartLines(cart) {
   return cart

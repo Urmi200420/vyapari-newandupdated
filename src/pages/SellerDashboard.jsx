@@ -10,6 +10,7 @@ import Reviews from "../s-dashboard/Reviews.jsx";
 import Wallet from "../s-dashboard/Wallet.jsx";
 import Profile from "../s-dashboard/Profile.jsx";
 import Support from "../s-dashboard/Support.jsx";
+import Complaints from "../s-dashboard/Complaints.jsx";
 import "../s-dashboard/dashboard.css";
 
 const TABS = [
@@ -18,6 +19,7 @@ const TABS = [
   { id: "orders", icon: "🛵", label: "Orders & delivery", title: "Orders", Page: Orders },
   { id: "history", icon: "📜", label: "Order history", title: "Order history", Page: History },
   { id: "reviews", icon: "⭐", label: "Customer reviews", title: "Reviews", Page: Reviews },
+  { id: "complaints", icon: "🧾", label: "Customer complaints", title: "Customer complaints", Page: Complaints },
   { id: "wallet", icon: "👛", label: "Wallet", title: "Wallet", Page: Wallet },
   { id: "profile", icon: "🏪", label: "Shop profile", title: "Shop profile", Page: Profile },
   { id: "support", icon: "💬", label: "Contact admin", title: "Contact admin", Page: Support },
