@@ -291,3 +291,8 @@
   color: var(--cream);
   line-height: 1;
 }
+
+/* Trip History: "Load more trips" uses the Vyapari dark green text (was white on a light glass button) */
+.btn.btn-load-more {
+  color: var(--on-cream) !important;
+}

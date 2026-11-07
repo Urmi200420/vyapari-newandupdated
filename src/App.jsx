@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { Routes, Route, useLocation } from "react-router-dom";
 import Intro from "./components/Intro.jsx";
 import GlassDefs from "./components/GlassDefs.jsx";
@@ -9,6 +9,14 @@ import SellerLanding from "./pages/SellerLanding.jsx";
 import DeliveryDashboard from "./pages/DeliveryDashboard.jsx";
 import { startSmoothScroll, scrollToTop } from "./smoothScroll.js";
 import Customer from "./customer/Customer.jsx";
+
+// Admin dashboard loads on demand, so the other pages ship the same bundle as before
+const AdminDashboard = lazy(() => import("./admin/AdminDashboard.jsx"));
+const admin = (
+  <Suspense fallback={<p className="dash-note">Loading admin dashboard...</p>}>
+    <AdminDashboard />
+  </Suspense>
+);
 
 
 export default function App() {
@@ -50,6 +58,9 @@ export default function App() {
           <Route path="/delivery-dashboard" element={<DeliveryDashboard />} />
           <Route path="/delivery" element={<DeliveryDashboard />} />
           <Route path="/customer/*" element={<Customer />} />
+          <Route path="/admin" element={admin} />
+          <Route path="/admin/dashboard" element={admin} />
+          <Route path="/admin-dashboard" element={admin} />
         </Routes>
       )}
     </>

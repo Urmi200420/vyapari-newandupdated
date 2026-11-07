@@ -87,7 +87,7 @@ export default function DeliveryHistory({ history = [] }) {
 
       {filtered.length > shown && (
         <div className="dash-row center">
-          <button className="btn btn-glass" onClick={() => setShown(shown + PAGE)}>
+          <button className="btn btn-glass btn-load-more" onClick={() => setShown(shown + PAGE)}>
             Load More Trips ({filtered.length - shown} left)
           </button>
         </div>
