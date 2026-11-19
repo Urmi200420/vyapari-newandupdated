@@ -9,9 +9,13 @@ import {
 } from "react-router-dom";
 import Button from "../components/GlassButton.jsx";
 import { products, categories } from "./data.js";
-import { placeOrder, BYPASS_LOGIN } from "./store.js";
-import { useCustomer } from "./CustomerContext.jsx";
-import { Complaints, ComplaintDetails } from "./Complaints.jsx";
+import {
+  loadState,
+  storageKey,
+  addItem,
+  placeOrder,
+  BYPASS_LOGIN,
+} from "./store.js";
 import { Heading, Empty } from "./shared.jsx";
 import { Shop, ProductDetails } from "./Catalog.jsx";
 import { Cart, Checkout } from "./Shopping.jsx";
@@ -19,6 +23,7 @@ import { Profile } from "./Account.jsx";
 import { OrderList, OrderDetails } from "./Orders.jsx";
 import { Overview } from "./Overview.jsx";
 import { Info } from "./Info.jsx";
+import Support from "./Support.jsx";
 import "./customer.css";
 const paths = [
   ["", "Dashboard"],
@@ -28,30 +33,55 @@ const paths = [
   ["orders", "My Orders"],
   ["history", "Order History"],
   ["profile", "Profile"],
-  ["complaints", "My Complaints"],
+  ["help", "Help & Support"],
   ["about", "About Us"],
   ["contact", "Contact Us"],
   ["faq", "FAQs"],
   ["policies", "Customer Policies"],
 ];
 export default function Customer() {
-  const {
-    state,
-    update: setState,
-    add,
-    notify,
-    storageError,
-    requestDemo,
-  } = useCustomer();
+  const [state, setState] = useState(loadState);
   const [menu, setMenu] = useState(false);
+  const [prompt, setPrompt] = useState(false);
+  const [toast, setToast] = useState("");
+  const [storageError, setStorageError] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
   const lock = useRef(false);
   useEffect(() => {
+    try {
+      localStorage.setItem(storageKey, JSON.stringify(state));
+      setStorageError(false);
+    } catch {
+      setStorageError(true);
+    }
+  }, [state]);
+  useEffect(() => {
     setMenu(false);
     lock.current = false;
   }, [location.pathname]);
+  useEffect(() => {
+    if (!toast) return;
+    const timer = setTimeout(() => setToast(""), 4500);
+    return () => clearTimeout(timer);
+  }, [toast]);
+  const notify = (message) => setToast(message);
   const registered = state.mode === "registered";
+  const add = (id, amount = 1) => {
+    if (!registered) {
+      setPrompt(true);
+      return false;
+    }
+    try {
+      const next = addItem(state, id, amount);
+      setState(next);
+      notify("Added to your cart.");
+      return true;
+    } catch (e) {
+      notify(e.message);
+      return false;
+    }
+  };
   const view = (id) =>
     setState((s) => ({
       ...s,
@@ -80,7 +110,7 @@ export default function Customer() {
           Switch to Registered User demo mode to access shopping and account
           features.
         </p>
-        <Button variant="solid" onClick={() => requestDemo()}>
+        <Button variant="solid" onClick={() => setPrompt(true)}>
           Login / Signup demo
         </Button>
       </section>
@@ -145,19 +175,19 @@ export default function Customer() {
           </button>
           <span>Customer {registered ? "dashboard" : "store"}</span>
           {!BYPASS_LOGIN && (
-            <label className="cu-mode">
-              Demo mode
-              <select
-                aria-label="Demo mode"
-                value={state.mode}
-                onChange={(e) =>
-                  setState((s) => ({ ...s, mode: e.target.value }))
-                }
-              >
-                <option value="guest">Guest</option>
-                <option value="registered">Registered User</option>
-              </select>
-            </label>
+          <label className="cu-mode">
+            Demo mode
+            <select
+              aria-label="Demo mode"
+              value={state.mode}
+              onChange={(e) =>
+                setState((s) => ({ ...s, mode: e.target.value }))
+              }
+            >
+              <option value="guest">Guest</option>
+              <option value="registered">Registered User</option>
+            </select>
+          </label>
           )}
           <Link
             to="/customer/cart"
@@ -246,8 +276,7 @@ export default function Customer() {
               <Profile state={state} update={setState} notify={notify} />,
             )}
           />
-          <Route path="complaints" element={guard(<Complaints />)} />
-          <Route path="complaints/:id" element={guard(<ComplaintDetails />)} />
+          <Route path="help" element={<Support state={state} notify={notify} />} />
           {["about", "contact", "faq", "policies"].map((page) => (
             <Route
               key={page}
@@ -264,6 +293,63 @@ export default function Customer() {
           <Link to="/customer/policies">Policies</Link>
         </footer>
       </main>
+      {toast && (
+        <div role="status" className="cu-toast glass-panel">
+          {toast}
+          <button
+            aria-label="Dismiss notification"
+            onClick={() => setToast("")}
+          >
+            ×
+          </button>
+        </div>
+      )}
+      {prompt && (
+        <DemoModal
+          close={() => setPrompt(false)}
+          enter={() => {
+            setState((s) => ({ ...s, mode: "registered" }));
+            setPrompt(false);
+            notify("Registered User demo enabled. You can now shop.");
+          }}
+        />
+      )}
     </div>
+  );
+}
+function DemoModal({ close, enter }) {
+  const ref = useRef(null);
+  useEffect(() => {
+    const before = document.activeElement;
+    ref.current.showModal();
+    return () => before?.focus();
+  }, []);
+  return (
+    <dialog
+      ref={ref}
+      className="cu-modal"
+      onCancel={close}
+      onKeyDown={(e) => {
+        if (e.key === "Escape") close();
+      }}
+    >
+      <button
+        className="cu-modal-close"
+        aria-label="Close dialog"
+        onClick={close}
+      >
+        ×
+      </button>
+      <p className="eyebrow">Welcome to Vyapari</p>
+      <h2>Try the customer experience.</h2>
+      <p>
+        Guests can browse. Continue as a registered demo customer to add to your
+        cart, checkout and track sample orders. No credentials are needed.
+      </p>
+      <Button variant="solid" onClick={enter}>
+        Continue as demo customer
+      </Button>
+      <Button onClick={close}>Keep browsing</Button>
+    </dialog>
   );
 }

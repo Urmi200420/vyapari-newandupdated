@@ -1,5 +1,5 @@
 /*
-  Support tickets: delivery person → admin.
+  Support tickets: delivery person → admin, and customer → admin.
   Same idea as api/index.js — fake data in the browser now, real Spring Boot later.
 
   USE_MOCK = true  → tickets live in localStorage (key "vyapari_tickets_v1"),
@@ -14,8 +14,13 @@
     subject, message,
     status ("OPEN" | "IN_PROGRESS" | "RESOLVED"),
     adminReply (or ""),
+    source ("DELIVERY" | "CUSTOMER"; old tickets without it count as DELIVERY),
     raisedBy, createdAt (ISO), updatedAt (ISO)
   }
+
+  Customer (the Help & Support chat):
+    POST  /api/customer/tickets       body { category, priority, orderId, subject, message } → Ticket
+    GET   /api/customer/tickets       → [Ticket]  (only this customer's, newest first)
 
   Delivery person:
     POST  /api/delivery/tickets       body { category, priority, orderId, subject, message } → Ticket
@@ -27,12 +32,13 @@
 */
 
 // Same VITE_USE_MOCK flag used by the rest of the app (api/index.js).
-// Set VITE_USE_MOCK=true in .env.development to use localStorage mock.
-const USE_MOCK = import.meta.env.VITE_USE_MOCK === "true";
+// Demo data (localStorage) is used unless .env says VITE_USE_MOCK=false.
+const USE_MOCK = import.meta.env.VITE_USE_MOCK !== "false";
 
 const KEY  = "vyapari_tickets_v1";
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
+// Delivery partners pick from these. Customer reasons live in customer/bot.js.
 export const CATEGORIES = [
   "Customer not reachable",
   "Wrong or incomplete address",
@@ -71,7 +77,7 @@ function save(list) {
 }
 
 const mock = {
-  async raiseTicket(payload, riderName) {
+  async raiseTicket(payload, riderName, source = "DELIVERY") {
     await wait(450);
     const list = load();
     const now  = new Date().toISOString();
@@ -79,9 +85,10 @@ const mock = {
       id:         Date.now(),
       ref:        `TKT-${1001 + list.length}`,
       ...payload,
+      source,
       status:     "OPEN",
       adminReply: "",
-      raisedBy:   riderName || "Delivery partner",
+      raisedBy:   riderName || (source === "CUSTOMER" ? "Customer" : "Delivery partner"),
       createdAt:  now,
       updatedAt:  now,
     };
@@ -89,9 +96,10 @@ const mock = {
     return ticket;
   },
 
-  async getMyTickets() {
+  // each screen only sees its own kind: riders see DELIVERY, customers see CUSTOMER
+  async getMyTickets(source = "DELIVERY") {
     await wait(150);
-    return load();
+    return load().filter((t) => (t.source || "DELIVERY") === source);
   },
 
   async getAllTickets() {
@@ -121,9 +129,11 @@ async function request(url, options = {}) {
   return res.status === 204 ? null : res.json();
 }
 
+const mine = (source) => (source === "CUSTOMER" ? "/api/customer/tickets" : "/api/delivery/tickets");
+
 const http = {
-  raiseTicket:  (payload) => request("/api/delivery/tickets",    { method: "POST",  body: JSON.stringify(payload) }),
-  getMyTickets: ()        => request("/api/delivery/tickets"),
+  raiseTicket:  (payload, _name, source = "DELIVERY") => request(mine(source), { method: "POST", body: JSON.stringify(payload) }),
+  getMyTickets: (source = "DELIVERY")                  => request(mine(source)),
   getAllTickets: ()        => request("/api/admin/tickets"),
   updateTicket: (id, ch)  => request(`/api/admin/tickets/${id}`, { method: "PATCH", body: JSON.stringify(ch) }),
 };
@@ -133,7 +143,7 @@ const http = {
 const impl = USE_MOCK ? mock : http;
 
 // .bind(impl) keeps `this` correct if mock methods ever reference it
-export const raiseTicket  = impl.raiseTicket .bind(impl); // ({category,priority,orderId,subject,message}, riderName?) → Ticket
-export const getMyTickets = impl.getMyTickets.bind(impl); // → [Ticket]
+export const raiseTicket  = impl.raiseTicket .bind(impl); // ({category,priority,orderId,subject,message}, name?, source?) → Ticket
+export const getMyTickets = impl.getMyTickets.bind(impl); // (source = "DELIVERY" | "CUSTOMER") → [Ticket]
 export const getAllTickets = impl.getAllTickets.bind(impl); // (admin) → [Ticket]
 export const updateTicket = impl.updateTicket.bind(impl); // (admin) (id, {status,adminReply}) → Ticket
