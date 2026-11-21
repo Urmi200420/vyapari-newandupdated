@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { getProfile, saveProfile } from "../api";
+import { getProfile, saveProfile } from "../api/sellerProfile.js";
 import GlassButton from "../components/GlassButton.jsx";
 import { useAsync, Loading, ErrorNote } from "./parts.jsx";
 
@@ -125,13 +125,8 @@ function ProfileForm({ initial }) {
             </label>
             <label className="field">
               Contact email
-              <input
-                required
-                type="email"
-                value={shop.email}
-                onChange={(e) => setTop("email", e.target.value)}
-                placeholder="owner@store.com"
-              />
+              <input required type="email" readOnly value={shop.email} onChange={(e) => setTop("email", e.target.value)} />
+              
             </label>
           </div>
 

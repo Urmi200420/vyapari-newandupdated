@@ -1,5 +1,10 @@
 import { useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { login, register } from "../api/auth.js";
+
+// one look for every box, same as before
+const inputStyle = { width: '100%', padding: '14px 18px', borderRadius: '12px', boxSizing: 'border-box', background: 'rgba(255, 255, 255, 0.8)', border: '1px solid rgba(15, 42, 29, 0.2)', color: '#0F2A1D', outline: 'none', fontSize: '15px' };
+const labelStyle = { display: 'block', marginBottom: '8px', fontSize: '14px', fontWeight: '500' };
 
 export default function SellerLanding() {
   const navigate = useNavigate();
@@ -11,10 +16,17 @@ export default function SellerLanding() {
   const [registerData, setRegisterData] = useState({
     storeName: "",
     ownerName: "",
+    email: "",
+    phone: "",
+    password: "",
     storeType: "Groceries & Essentials",
     aadhaarNumber: "",
     location: ""
   });
+  const [loginError, setLoginError] = useState("");
+  const [registerError, setRegisterError] = useState("");
+  const [notice, setNotice] = useState("");
+  const [busy, setBusy] = useState(false);
 
   const scrollToLogin = () => {
     loginRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -24,18 +36,48 @@ export default function SellerLanding() {
     registerRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
   };
 
-  // Direct login bypass straight into the dashboard
-  const handleLoginSubmit = (e) => {
+  // Real login: only an approved seller gets in
+  const handleLoginSubmit = async (e) => {
     e.preventDefault();
-    console.log("Logging in seller:", loginData);
-    navigate('/seller-dashboard'); 
+    setLoginError("");
+    setNotice("");
+    setBusy(true);
+    try {
+      await login({ email: loginData.email, password: loginData.password, role: "seller" });
+      navigate('/seller-dashboard');
+    } catch (err) {
+      setLoginError(err.message || "Could not log in");
+    } finally {
+      setBusy(false);
+    }
   };
 
-  const handleRegisterSubmit = (e) => {
+  // Real registration: the application goes to the admin as PENDING
+  const handleRegisterSubmit = async (e) => {
     e.preventDefault();
-    console.log("Submitting store registration:", registerData);
-    alert("Store Registration Submitted Successfully!");
-    navigate('/seller-dashboard');
+    setRegisterError("");
+    setNotice("");
+    setBusy(true);
+    try {
+      await register({
+        name: registerData.ownerName,
+        email: registerData.email,
+        phone: registerData.phone,
+        password: registerData.password,
+        role: "seller",
+        shopName: registerData.storeName,
+        city: registerData.location,
+        // storeType and aadhaarNumber stay in this form; the backend does not store them yet
+      });
+      setNotice("Application sent! You can log in as soon as an admin approves your store.");
+      setLoginData({ email: registerData.email, password: "" });
+      setRegisterData({ ...registerData, password: "" });
+      scrollToLogin();
+    } catch (err) {
+      setRegisterError(err.message || "Could not send your application");
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
@@ -136,7 +178,7 @@ export default function SellerLanding() {
 
             <form onSubmit={handleLoginSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
               <div>
-                <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', fontWeight: '500' }}>
+                <label style={labelStyle}>
                   Business Email
                 </label>
                 <input 
@@ -145,12 +187,13 @@ export default function SellerLanding() {
                   onChange={(e) => setLoginData({ ...loginData, email: e.target.value })} 
                   required
                   placeholder="seller@vyapari.com"
-                  style={{ width: '100%', padding: '14px 18px', borderRadius: '12px', boxSizing: 'border-box', background: 'rgba(255, 255, 255, 0.8)', border: '1px solid rgba(15, 42, 29, 0.2)', color: '#0F2A1D', outline: 'none', fontSize: '15px' }}
+                  autoComplete="email"
+                  style={inputStyle}
                 />
               </div>
 
               <div>
-                <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', fontWeight: '500' }}>
+                <label style={labelStyle}>
                   Password
                 </label>
                 <input 
@@ -159,12 +202,16 @@ export default function SellerLanding() {
                   onChange={(e) => setLoginData({ ...loginData, password: e.target.value })} 
                   required
                   placeholder="••••••••"
-                  style={{ width: '100%', padding: '14px 18px', borderRadius: '12px', boxSizing: 'border-box', background: 'rgba(255, 255, 255, 0.8)', border: '1px solid rgba(15, 42, 29, 0.2)', color: '#0F2A1D', outline: 'none', fontSize: '15px' }}
+                  autoComplete="current-password"
+                  style={inputStyle}
                 />
               </div>
 
-              <button type="submit" className="btn btn-solid" style={{ width: '100%', marginTop: '10px', padding: '14px', fontSize: '16px' }}>
-                Sign In to Portal (Go to Dashboard)
+              {notice && <p role="status" style={{ margin: 0, fontSize: '14px', fontWeight: '500', color: '#1f6b3a' }}>{notice}</p>}
+              {loginError && <p role="alert" style={{ margin: 0, fontSize: '14px', fontWeight: '500', color: '#b3261e' }}>{loginError}</p>}
+
+              <button type="submit" disabled={busy} className="btn btn-solid" style={{ width: '100%', marginTop: '10px', padding: '14px', fontSize: '16px' }}>
+                {busy ? "Please wait..." : "Sign In to Portal (Go to Dashboard)"}
               </button>
             </form>
           </section>
@@ -180,7 +227,7 @@ export default function SellerLanding() {
 
             <form onSubmit={handleRegisterSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
               <div>
-                <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', fontWeight: '500' }}>
+                <label style={labelStyle}>
                   Store Name
                 </label>
                 <input 
@@ -189,13 +236,15 @@ export default function SellerLanding() {
                   value={registerData.storeName} 
                   onChange={(e) => setRegisterData({ ...registerData, storeName: e.target.value })} 
                   required
+                  minLength={2}
+                  maxLength={80}
                   placeholder="e.g., Sharma General Store"
-                  style={{ width: '100%', padding: '14px 18px', borderRadius: '12px', boxSizing: 'border-box', background: 'rgba(255, 255, 255, 0.8)', border: '1px solid rgba(15, 42, 29, 0.2)', color: '#0F2A1D', outline: 'none', fontSize: '15px' }}
+                  style={inputStyle}
                 />
               </div>
 
               <div>
-                <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', fontWeight: '500' }}>
+                <label style={labelStyle}>
                   Store Holder Name
                 </label>
                 <input 
@@ -204,20 +253,77 @@ export default function SellerLanding() {
                   value={registerData.ownerName} 
                   onChange={(e) => setRegisterData({ ...registerData, ownerName: e.target.value })} 
                   required
+                  minLength={2}
+                  maxLength={80}
                   placeholder="e.g., Rajesh Sharma"
-                  style={{ width: '100%', padding: '14px 18px', borderRadius: '12px', boxSizing: 'border-box', background: 'rgba(255, 255, 255, 0.8)', border: '1px solid rgba(15, 42, 29, 0.2)', color: '#0F2A1D', outline: 'none', fontSize: '15px' }}
+                  style={inputStyle}
+                />
+              </div>
+
+              {/* NEW: the login details for this store */}
+              <div>
+                <label style={labelStyle}>
+                  Business Email
+                </label>
+                <input 
+                  type="email" 
+                  name="email"
+                  value={registerData.email} 
+                  onChange={(e) => setRegisterData({ ...registerData, email: e.target.value })} 
+                  required
+                  placeholder="you@example.com"
+                  autoComplete="email"
+                  style={inputStyle}
                 />
               </div>
 
               <div>
-                <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', fontWeight: '500' }}>
+                <label style={labelStyle}>
+                  Mobile Number
+                </label>
+                <input 
+                  type="text" 
+                  name="phone"
+                  inputMode="numeric"
+                  pattern="[6-9][0-9]{9}"
+                  title="Enter a valid 10-digit mobile number"
+                  maxLength={10}
+                  value={registerData.phone} 
+                  onChange={(e) => setRegisterData({ ...registerData, phone: e.target.value.replace(/\D/g, "") })} 
+                  required
+                  placeholder="10 digits"
+                  autoComplete="tel-national"
+                  style={inputStyle}
+                />
+              </div>
+
+              <div>
+                <label style={labelStyle}>
+                  Create Password
+                </label>
+                <input 
+                  type="password" 
+                  name="password"
+                  value={registerData.password} 
+                  onChange={(e) => setRegisterData({ ...registerData, password: e.target.value })} 
+                  required
+                  minLength={8}
+                  maxLength={72}
+                  placeholder="At least 8 characters"
+                  autoComplete="new-password"
+                  style={inputStyle}
+                />
+              </div>
+
+              <div>
+                <label style={labelStyle}>
                   Type of Goods / Store Sells
                 </label>
                 <select 
                   name="storeType"
                   value={registerData.storeType} 
                   onChange={(e) => setRegisterData({ ...registerData, storeType: e.target.value })}
-                  style={{ width: '100%', padding: '14px 18px', borderRadius: '12px', boxSizing: 'border-box', background: 'rgba(255, 255, 255, 0.8)', border: '1px solid rgba(15, 42, 29, 0.2)', color: '#0F2A1D', outline: 'none', fontSize: '15px' }}
+                  style={inputStyle}
                 >
                   <option value="Groceries & Essentials">Groceries & Essentials</option>
                   <option value="Electronics & Gadgets">Electronics & Gadgets</option>
@@ -228,22 +334,23 @@ export default function SellerLanding() {
               </div>
 
               <div>
-                <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', fontWeight: '500' }}>
+                <label style={labelStyle}>
                   Store Location / Address
                 </label>
                 <input 
                   type="text" 
                   name="location"
+                  maxLength={60}
                   value={registerData.location} 
                   onChange={(e) => setRegisterData({ ...registerData, location: e.target.value })} 
                   required
                   placeholder="City, Market Area or Pincode"
-                  style={{ width: '100%', padding: '14px 18px', borderRadius: '12px', boxSizing: 'border-box', background: 'rgba(255, 255, 255, 0.8)', border: '1px solid rgba(15, 42, 29, 0.2)', color: '#0F2A1D', outline: 'none', fontSize: '15px' }}
+                  style={inputStyle}
                 />
               </div>
 
               <div>
-                <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', fontWeight: '500' }}>
+                <label style={labelStyle}>
                   Aadhaar Card Details (12-digit number)
                 </label>
                 <input 
@@ -254,12 +361,14 @@ export default function SellerLanding() {
                   onChange={(e) => setRegisterData({ ...registerData, aadhaarNumber: e.target.value })} 
                   required
                   placeholder="XXXX XXXX XXXX"
-                  style={{ width: '100%', padding: '14px 18px', borderRadius: '12px', boxSizing: 'border-box', background: 'rgba(255, 255, 255, 0.8)', border: '1px solid rgba(15, 42, 29, 0.2)', color: '#0F2A1D', outline: 'none', fontSize: '15px' }}
+                  style={inputStyle}
                 />
               </div>
 
-              <button type="submit" className="btn btn-solid" style={{ width: '100%', marginTop: '10px', padding: '14px', fontSize: '16px' }}>
-                Complete Registration & Launch Dashboard
+              {registerError && <p role="alert" style={{ margin: 0, fontSize: '14px', fontWeight: '500', color: '#b3261e' }}>{registerError}</p>}
+
+              <button type="submit" disabled={busy} className="btn btn-solid" style={{ width: '100%', marginTop: '10px', padding: '14px', fontSize: '16px' }}>
+                {busy ? "Please wait..." : "Send Application for Approval"}
               </button>
             </form>
           </section>

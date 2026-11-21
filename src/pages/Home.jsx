@@ -120,7 +120,7 @@ export default function Home() {
             <Link to="/seller" className="text-link">
               Sell on Vyapari
             </Link>
-            <GlassButton to="/customer" variant="solid">
+            <GlassButton to="/login" variant="solid">
               Log in
             </GlassButton>
           </nav>

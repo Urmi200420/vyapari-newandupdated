@@ -1,18 +1,28 @@
 import { useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import GlassButton from "../components/GlassButton.jsx";
+import { login, register, homeFor } from "../api/auth.js";
 
-// Staff logins, opened from the sidebar: /login?role=admin  or  /login?role=delivery
-const STAFF = {
+// Special doors, opened from the sidebar:  /login?role=seller   /login?role=delivery   /login?role=admin
+// canSignup: seller and delivery partners can apply here, admin accounts cannot
+const DOORS = {
   admin: {
     hello: "Staff access",
     title: "Admin login",
     tagline: "Manage items, stock, orders and sellers.",
+    canSignup: false,
   },
   delivery: {
     hello: "Delivery partner",
-    title: "Delivery login",
-    tagline: "See your assigned orders and drop addresses.",
+    title: "Delivery portal",
+    tagline: "Log in, or apply to deliver orders. An admin approves new partners.",
+    canSignup: true,
+  },
+  seller: {
+    hello: "Seller",
+    title: "Seller portal",
+    tagline: "Log in, or register your shop. An admin approves new sellers.",
+    canSignup: true,
   },
 };
 
@@ -20,39 +30,57 @@ export default function Login() {
   const [params] = useSearchParams();
   const navigate = useNavigate();
 
-  // "admin", "delivery", or null for normal customer / seller login
-  const staffRole = STAFF[params.get("role")] ? params.get("role") : null;
-  const staff = staffRole ? STAFF[staffRole] : null;
+  // "admin", "delivery", "seller", or null for the normal customer login.
+  // (join=delivery is the older link style and still works)
+  const asked = params.get("role") || params.get("join");
+  const doorRole = DOORS[asked] ? asked : null;
+  const door = doorRole ? DOORS[doorRole] : null;
+  const canSignup = !door || door.canSignup;
 
-  const [mode, setMode] = useState(!staff && params.get("mode") === "signup" ? "signup" : "login");
-  const [role, setRole] = useState("customer");
+  const [mode, setMode] = useState(canSignup && params.get("mode") === "signup" ? "signup" : "login");
+  const [pickedRole, setPickedRole] = useState("customer");
+  const [name, setName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [shopName, setShopName] = useState("");
+  const [city, setCity] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
+
+  // on a seller / delivery door the role is fixed; on the normal page the person chooses
+  const role = doorRole === "seller" || doorRole === "delivery" ? doorRole : pickedRole;
+
+  const switchMode = (m) => {
+    setMode(m);
+    setError("");
+    setNotice("");
+  };
 
   const submit = async (e) => {
     e.preventDefault();
     setError("");
+    setNotice("");
     setBusy(true);
     try {
-      // Endpoints assumed from the Spring Boot AuthController; adjust if yours differ
-      const url = mode === "login" ? "/api/login" : "/api/signup";
-      const body =
-        mode === "login"
-          ? { email, password, ...(staffRole ? { role: staffRole } : {}) }
-          : { email, password, role };
-      const res = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      if (!res.ok) throw new Error((await res.text()) || "Something went wrong");
-      const data = await res.json().catch(() => ({}));
-      const who = data.role || staffRole || role;
-      localStorage.setItem("vyapari_role", who);
-      // sellers go to their dashboard; later: admin to /admin and delivery to /delivery
-      navigate(who === "seller" ? "/seller/dashboard" : "/");
+      if (mode === "signup") {
+        await register({ name, email, phone, password, role, ...(role === "seller" ? { shopName, city } : {}) });
+        if (role === "seller" || role === "delivery") {
+          // sellers and delivery partners must wait for the admin, so they are not logged in yet
+          setNotice(
+            role === "seller"
+              ? "Application sent! You can log in as soon as an admin approves your shop."
+              : "Application sent! You can log in as soon as an admin approves your delivery account."
+          );
+          setMode("login");
+          setPassword("");
+          return;
+        }
+        // customers can start straight away
+      }
+      const user = await login({ email, password, ...(doorRole ? { role: doorRole } : {}) });
+      navigate(homeFor(user.role));
     } catch (err) {
       setError(err.message || "Could not reach the server");
     } finally {
@@ -67,11 +95,11 @@ export default function Login() {
           ← Back to browsing
         </GlassButton>
 
-        <h1 className={"stack-title auth-title" + (staff ? " staff" : "")}>
-          {staff ? (
+        <h1 className={"stack-title auth-title" + (door ? " staff" : "")}>
+          {door ? (
             <>
-              <em>{staff.hello}</em>
-              <strong>{staff.title}</strong>
+              <em>{door.hello}</em>
+              <strong>{door.title}</strong>
             </>
           ) : (
             <>
@@ -80,76 +108,102 @@ export default function Login() {
             </>
           )}
         </h1>
-        <p className="tagline">{staff ? staff.tagline : "Buy anything. Sell everything."}</p>
+        <p className="tagline">{door ? door.tagline : "Buy anything. Sell everything."}</p>
 
-        {/* customers and sellers can sign up; admin and delivery accounts cannot */}
-        {!staff && (
+        {canSignup && (
           <div className="tabs">
-            <button type="button" className={mode === "login" ? "on" : ""} onClick={() => setMode("login")}>
+            <button type="button" className={mode === "login" ? "on" : ""} onClick={() => switchMode("login")}>
               Log in
             </button>
-            <button type="button" className={mode === "signup" ? "on" : ""} onClick={() => setMode("signup")}>
-              Sign up
+            <button type="button" className={mode === "signup" ? "on" : ""} onClick={() => switchMode("signup")}>
+              {door ? (doorRole === "seller" ? "Register as seller" : "Apply to deliver") : "Sign up"}
             </button>
           </div>
         )}
 
         <form onSubmit={submit}>
-          {mode === "signup" && !staff && (
+          {/* only the normal page lets people choose what they are */}
+          {mode === "signup" && !door && (
             <div className="roles">
-              <label className={role === "customer" ? "on" : ""}>
-                <input
-                  type="radio"
-                  name="role"
-                  checked={role === "customer"}
-                  onChange={() => setRole("customer")}
-                />
+              <label className={pickedRole === "customer" ? "on" : ""}>
+                <input type="radio" name="role" checked={pickedRole === "customer"} onChange={() => setPickedRole("customer")} />
                 🛒 I want to buy
               </label>
-              <label className={role === "seller" ? "on" : ""}>
-                <input
-                  type="radio"
-                  name="role"
-                  checked={role === "seller"}
-                  onChange={() => setRole("seller")}
-                />
+              <label className={pickedRole === "seller" ? "on" : ""}>
+                <input type="radio" name="role" checked={pickedRole === "seller"} onChange={() => setPickedRole("seller")} />
                 🏪 I want to sell
+              </label>
+              <label className={pickedRole === "delivery" ? "on" : ""}>
+                <input type="radio" name="role" checked={pickedRole === "delivery"} onChange={() => setPickedRole("delivery")} />
+                🚴 I want to deliver
               </label>
             </div>
           )}
 
+          {mode === "signup" && (
+            <>
+              <label className="field">
+                Full name
+                <input required minLength={2} maxLength={80} value={name} onChange={(e) => setName(e.target.value)} placeholder="Your name" autoComplete="name" />
+              </label>
+              <label className="field">
+                Mobile number
+                <input
+                  required
+                  inputMode="numeric"
+                  pattern="[6-9][0-9]{9}"
+                  title="Enter a valid 10-digit mobile number"
+                  maxLength={10}
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value.replace(/\D/g, ""))}
+                  placeholder="10 digits"
+                  autoComplete="tel-national"
+                />
+              </label>
+              {role === "seller" && (
+                <>
+                  <label className="field">
+                    Shop name
+                    <input required minLength={2} maxLength={80} value={shopName} onChange={(e) => setShopName(e.target.value)} placeholder="e.g. Green Basket Market" />
+                  </label>
+                  <label className="field">
+                    City
+                    <input maxLength={60} value={city} onChange={(e) => setCity(e.target.value)} placeholder="e.g. Kolkata" />
+                  </label>
+                </>
+              )}
+            </>
+          )}
+
           <label className="field">
             Email
-            <input
-              type="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="you@example.com"
-            />
+            <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" autoComplete="email" />
           </label>
           <label className="field">
             Password
             <input
               type="password"
               required
-              minLength={6}
+              minLength={8}
+              maxLength={72}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="At least 6 characters"
+              placeholder="At least 8 characters"
+              autoComplete={mode === "login" ? "current-password" : "new-password"}
             />
           </label>
 
-          {error && <p className="error">{error}</p>}
+          {notice && <p className="success" role="status">{notice}</p>}
+          {error && <p className="error" role="alert">{error}</p>}
 
           <GlassButton type="submit" variant="solid" block disabled={busy}>
-            {busy ? "Please wait..." : mode === "login" ? "Log in" : "Create account"}
+            {busy ? "Please wait..." : mode === "login" ? "Log in" : doorRole === "seller" ? "Send application" : doorRole === "delivery" ? "Send application" : "Create account"}
           </GlassButton>
         </form>
 
-        {staff && (
+        {door && (
           <p className="staff-switch">
-            Not staff? <Link to="/login">Customer login</Link>
+            Not {doorRole === "admin" ? "staff" : "a " + doorRole}? <Link to="/login">Customer login</Link>
           </p>
         )}
       </div>

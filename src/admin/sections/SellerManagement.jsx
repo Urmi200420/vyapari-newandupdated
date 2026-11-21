@@ -1,13 +1,12 @@
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAdmin } from "../AdminContext.jsx";
-import { approveSeller, rejectSeller, blockSeller, reactivateSeller } from "../data/store.js";
+import { fetchSellers, approveSeller, rejectSeller, blockSeller, unblockSeller } from "../../api/adminSellers.js";
 import {
   Title, Seg, Chips, Search, Badge, Person, Empty, Confirm, Modal, Details, GlassButton, Pager, usePaged, useSort,
   fmtDate, fmtDateTime, timeAgo, rupees, compactRupees, num, matches,
 } from "../ui.jsx";
 
-const catName = (db, id) => db.categories.find((c) => c.id === id)?.name || id;
-
+// Other admin pages import this, so it stays exported (demo orders never match real sellers, so it shows zeros for them)
 export function sellerStats(db, id) {
   const orders = db.orders.filter((o) => o.sellerId === id);
   const live = orders.filter((o) => o.status !== "CANCELLED");
@@ -22,19 +21,72 @@ export function sellerStats(db, id) {
   };
 }
 
+// The backend sends { id, name, email, phone, shopName, city, status, createdAt }.
+// This fills in the extra fields the screen expects, so nothing crashes while the backend does not store them yet.
+const toSeller = (r) => ({
+  id: r.id,
+  name: r.name,
+  business: r.shopName || r.name,
+  email: r.email,
+  phone: r.phone || "—",
+  city: r.city || "—",
+  pincode: "",
+  gstin: "—",
+  categories: [],
+  status: r.status,
+  statusNote: "",
+  registeredAt: r.createdAt,
+  approvedAt: r.status === "PENDING" || r.status === "REJECTED" ? null : r.createdAt,
+  lastActiveAt: r.createdAt,
+  rating: 0,
+  products: 0,
+  history: [{ at: r.createdAt, text: "Registered as a seller" }],
+});
+
 export default function SellerManagement({ view, setView }) {
-  const { db, run } = useAdmin();
+  const { db } = useAdmin();
+  const [sellers, setSellers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
   const [confirm, setConfirm] = useState(null);
   const [details, setDetails] = useState(null);
   const tab = view === "active" ? "active" : "requests";
 
+  const load = useCallback(async () => {
+    try {
+      setError("");
+      const rows = await fetchSellers();
+      setSellers(rows.map(toSeller));
+    } catch (e) {
+      setError(e.message || "Could not load sellers");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  // calls the backend, then reloads the list
+  const doAct = async (fn, id) => {
+    try {
+      setError("");
+      await fn(id);
+      await load();
+    } catch (e) {
+      setError(e.message || "Something went wrong");
+    }
+    setConfirm(null);
+  };
+
   const counts = {
-    PENDING: db.sellers.filter((s) => s.status === "PENDING").length,
-    approved: db.sellers.filter((s) => s.status === "ACTIVE" || s.status === "BLOCKED").length,
+    PENDING: sellers.filter((s) => s.status === "PENDING").length,
+    approved: sellers.filter((s) => s.status === "ACTIVE" || s.status === "BLOCKED").length,
   };
 
   const act = (kind, s) => setConfirm({ kind, s });
-  const shown = details && db.sellers.find((s) => s.id === details);
+  const shown = details && sellers.find((s) => s.id === details);
 
   return (
     <div className="dash-stack ad-stack">
@@ -53,7 +105,17 @@ export default function SellerManagement({ view, setView }) {
         </div>
       </div>
 
-      {tab === "requests" ? <Requests db={db} onAct={act} onView={setDetails} /> : <Approved db={db} onAct={act} onView={setDetails} />}
+      {error && (
+        <p className="error" role="alert">
+          {error}{" "}
+          <button type="button" className="link-btn" onClick={load}>
+            Try again
+          </button>
+        </p>
+      )}
+      {loading && <p className="dash-note left">Loading sellers…</p>}
+
+      {!loading && (tab === "requests" ? <Requests db={db} sellers={sellers} onAct={act} onView={setDetails} /> : <Approved db={db} sellers={sellers} onAct={act} onView={setDetails} />)}
 
       {shown && <SellerDetails db={db} s={shown} onClose={() => setDetails(null)} onAct={act} />}
 
@@ -62,11 +124,11 @@ export default function SellerManagement({ view, setView }) {
           title="Approve seller?"
           message={
             <>
-              <b>{confirm.s.business}</b> ({confirm.s.name}) will change from <b>PENDING</b> to <b>ACTIVE</b> and can start selling.
+              <b>{confirm.s.business}</b> ({confirm.s.name}) will change from <b>PENDING</b> to <b>ACTIVE</b> and can log in and start selling.
             </>
           }
           confirm="Approve seller"
-          onConfirm={() => run(approveSeller, confirm.s.id)}
+          onConfirm={() => doAct(approveSeller, confirm.s.id)}
           onClose={() => setConfirm(null)}
         />
       )}
@@ -80,9 +142,9 @@ export default function SellerManagement({ view, setView }) {
           }
           confirm="Reject"
           danger
-          reason="Reason shown to the seller"
+          reason="Reason (not saved yet)"
           reasonPlaceholder="e.g. GST certificate missing or unreadable"
-          onConfirm={(r) => run(rejectSeller, confirm.s.id, r)}
+          onConfirm={() => doAct(rejectSeller, confirm.s.id)}
           onClose={() => setConfirm(null)}
         />
       )}
@@ -91,15 +153,14 @@ export default function SellerManagement({ view, setView }) {
           title="Block this seller?"
           message={
             <>
-              <b>{confirm.s.business}</b> will be deactivated. Their products are hidden from customers until you reactivate them. Orders already placed are not affected.
+              <b>{confirm.s.business}</b> will be deactivated and cannot log in until you reactivate them. Orders already placed are not affected.
             </>
           }
           confirm="Block seller"
           danger
-          reason="Reason for blocking"
-          reasonRequired
+          reason="Reason for blocking (not saved yet)"
           reasonPlaceholder="e.g. repeated counterfeit complaints"
-          onConfirm={(r) => run(blockSeller, confirm.s.id, r)}
+          onConfirm={() => doAct(blockSeller, confirm.s.id)}
           onClose={() => setConfirm(null)}
         />
       )}
@@ -108,12 +169,11 @@ export default function SellerManagement({ view, setView }) {
           title="Reactivate seller?"
           message={
             <>
-              <b>{confirm.s.business}</b> will be <b>ACTIVE</b> again and their listings become visible.
-              {confirm.s.statusNote && <span className="ad-quote">Blocked for: {confirm.s.statusNote}</span>}
+              <b>{confirm.s.business}</b> will be <b>ACTIVE</b> again and can log in.
             </>
           }
           confirm="Reactivate"
-          onConfirm={() => run(reactivateSeller, confirm.s.id)}
+          onConfirm={() => doAct(unblockSeller, confirm.s.id)}
           onClose={() => setConfirm(null)}
         />
       )}
@@ -122,15 +182,16 @@ export default function SellerManagement({ view, setView }) {
 }
 
 /* ---------------- A. registration requests ---------------- */
-function Requests({ db, onAct, onView }) {
+function Requests({ sellers, onAct, onView }) {
   const [filter, setFilter] = useState("PENDING");
   const [q, setQ] = useState("");
   const now = Date.now();
-  const apps = db.sellers.filter((s) =>
-    filter === "PENDING" ? s.status === "PENDING" : filter === "REJECTED" ? s.status === "REJECTED" : filter === "recent" ? s.approvedAt && now - Date.parse(s.approvedAt) < 30 * 864e5 : true
+  const isRecent = (s) => s.approvedAt && now - Date.parse(s.approvedAt) < 30 * 864e5;
+  const apps = sellers.filter((s) =>
+    filter === "PENDING" ? s.status === "PENDING" : filter === "REJECTED" ? s.status === "REJECTED" : filter === "recent" ? isRecent(s) : true
   );
   const list = apps.filter((s) => matches(q, s.name, s.business, s.email, s.phone, s.city)).sort((a, b) => b.registeredAt.localeCompare(a.registeredAt));
-  const recent = db.sellers.filter((s) => s.approvedAt && now - Date.parse(s.approvedAt) < 30 * 864e5).length;
+  const recent = sellers.filter(isRecent).length;
 
   return (
     <section className="panel">
@@ -140,10 +201,10 @@ function Requests({ db, onAct, onView }) {
           value={filter}
           onChange={setFilter}
           options={[
-            { id: "PENDING", label: "Pending", count: db.sellers.filter((s) => s.status === "PENDING").length },
+            { id: "PENDING", label: "Pending", count: sellers.filter((s) => s.status === "PENDING").length },
             { id: "recent", label: "Approved (30 days)", count: recent },
-            { id: "REJECTED", label: "Rejected", count: db.sellers.filter((s) => s.status === "REJECTED").length },
-            { id: "all", label: "All applications", count: db.sellers.length },
+            { id: "REJECTED", label: "Rejected", count: sellers.filter((s) => s.status === "REJECTED").length },
+            { id: "all", label: "All applications", count: sellers.length },
           ]}
         />
         <Search value={q} onChange={setQ} placeholder="Search name, business, email or phone" />
@@ -163,9 +224,7 @@ function Requests({ db, onAct, onView }) {
                   ["Email", <a href={"mailto:" + s.email}>{s.email}</a>],
                   ["Contact", s.phone],
                   ["Registered", fmtDate(s.registeredAt) + " · " + timeAgo(s.registeredAt)],
-                  ["Location", s.city + " " + s.pincode],
-                  ["Sells", s.categories.map((c) => catName(db, c)).join(", ")],
-                  s.statusNote && [s.status === "REJECTED" ? "Rejected for" : "Note", s.statusNote],
+                  ["Location", s.city],
                 ]}
               />
               <div className="ad-app-actions">
@@ -179,7 +238,7 @@ function Requests({ db, onAct, onView }) {
                     </GlassButton>
                   </>
                 ) : (
-                  <span className="muted ad-small">{s.status === "REJECTED" ? "Application closed" : "Approved " + timeAgo(s.approvedAt)}</span>
+                  <span className="muted ad-small">{s.status === "REJECTED" ? "Application closed" : "Approved"}</span>
                 )}
                 <button type="button" className="link-btn" onClick={() => onView(s.id)}>
                   View details
@@ -194,18 +253,18 @@ function Requests({ db, onAct, onView }) {
 }
 
 /* ---------------- B. approved sellers ---------------- */
-function Approved({ db, onAct, onView }) {
+function Approved({ db, sellers, onAct, onView }) {
   const [filter, setFilter] = useState("all");
   const [q, setQ] = useState("");
   const rows = useMemo(
     () =>
-      db.sellers
+      sellers
         .filter((s) => s.status === "ACTIVE" || s.status === "BLOCKED")
         .map((s) => ({ ...s, stats: sellerStats(db, s.id) })),
-    [db]
+    [db, sellers]
   );
   const filtered = rows.filter((s) => (filter === "all" || s.status === filter) && matches(q, s.name, s.business, s.email, s.city, s.id));
-  const { sorted, th } = useSort(filtered, { key: "gmv", dir: "desc" }, {
+  const { sorted, th } = useSort(filtered, { key: "since", dir: "desc" }, {
     name: (s) => s.business,
     since: (s) => s.approvedAt || "",
     orders: (s) => s.stats.count,
@@ -246,8 +305,6 @@ function Approved({ db, onAct, onView }) {
                   {th("since", "Approved")}
                   {th("orders", "Orders (45d)", "num")}
                   {th("gmv", "GMV (45d)", "num")}
-                  {th("rating", "Rating", "num")}
-                  {th("seen", "Last active")}
                   <th>Status</th>
                   <th className="num">Actions</th>
                 </tr>
@@ -256,7 +313,7 @@ function Approved({ db, onAct, onView }) {
                 {paged.slice.map((s) => (
                   <tr key={s.id} className={s.status === "BLOCKED" ? "ad-row-dim" : ""}>
                     <td>
-                      <Person name={s.business} sub={s.name + " · " + s.id} />
+                      <Person name={s.business} sub={s.name + " · #" + s.id} />
                     </td>
                     <td className="ad-small">
                       {s.email}
@@ -266,8 +323,6 @@ function Approved({ db, onAct, onView }) {
                     <td>{s.approvedAt ? fmtDate(s.approvedAt) : "—"}</td>
                     <td className="num">{num(s.stats.count)}</td>
                     <td className="num">{rupees(s.stats.gmv)}</td>
-                    <td className="num">{s.rating ? "★ " + s.rating.toFixed(1) : "—"}</td>
-                    <td className="ad-small">{timeAgo(s.lastActiveAt)}</td>
                     <td>
                       <Badge status={s.status} />
                     </td>
@@ -299,25 +354,15 @@ function Approved({ db, onAct, onView }) {
   );
 }
 
-/* ---------------- details + activity ---------------- */
+/* ---------------- details ---------------- */
 function SellerDetails({ db, s, onClose, onAct }) {
   const st = sellerStats(db, s.id);
-  const openTickets = st.tickets.filter((t) => t.status === "OPEN" || t.status === "IN_PROGRESS").length;
-  const openRefunds = st.refunds.filter((r) => r.status === "PENDING" || r.status === "UNDER_REVIEW").length;
-  const activity = [
-    ...s.history.map((h) => ({ at: h.at, icon: "🛡️", text: h.text })),
-    ...st.orders.slice(0, 6).map((o) => ({ at: o.createdAt, icon: "📦", text: `Order ${o.id} from ${o.customerName} · ${rupees(o.amount)} · ${o.status.replace("_", " ").toLowerCase()}` })),
-    ...st.tickets.map((t) => ({ at: t.createdAt, icon: "🎫", text: `Raised ticket ${t.id}: ${t.subject}` })),
-    ...st.refunds.map((r) => ({ at: r.requestedAt, icon: "↩️", text: `${r.type === "RETURN" ? "Return" : "Refund"} request ${r.id} on ${r.orderId} · ${r.status.replace("_", " ").toLowerCase()}` })),
-  ].sort((a, b) => b.at.localeCompare(a.at));
-
   return (
     <Modal title={s.business} onClose={onClose} wide>
       <div className="ad-detail-head">
-        <Person name={s.name} sub={s.id + " · " + s.city} />
+        <Person name={s.name} sub={"#" + s.id + " · " + s.city} />
         <Badge status={s.status} />
       </div>
-      {s.statusNote && <p className={"ad-callout" + (s.status === "BLOCKED" || s.status === "REJECTED" ? " bad" : "")}>{s.statusNote}</p>}
       <div className="ad-mini-stats">
         <div>
           <b>{num(st.count)}</b>
@@ -327,46 +372,17 @@ function SellerDetails({ db, s, onClose, onAct }) {
           <b>{compactRupees(st.gmv)}</b>
           <span>GMV · 45 days</span>
         </div>
-        <div>
-          <b>{st.count ? Math.round((st.delivered / st.count) * 100) + "%" : "—"}</b>
-          <span>Delivered</span>
-        </div>
-        <div>
-          <b>{openTickets + openRefunds}</b>
-          <span>Open tickets & returns</span>
-        </div>
       </div>
       <Details
         rows={[
           ["Owner", s.name],
+          ["Shop", s.business],
           ["Email", s.email],
           ["Contact", s.phone],
-          ["GSTIN", s.gstin],
-          ["Pickup pincode", s.pincode + " · " + s.city],
-          ["Categories", s.categories.map((c) => catName(db, c)).join(", ")],
+          ["City", s.city],
           ["Registered", fmtDateTime(s.registeredAt)],
-          ["Approved", s.approvedAt ? fmtDateTime(s.approvedAt) : "—"],
-          ["Listed products", s.products ? num(s.products) : "—"],
-          ["Rating", s.rating ? "★ " + s.rating.toFixed(1) : "—"],
-          ["Last active", timeAgo(s.lastActiveAt)],
         ]}
       />
-      <h3 className="ad-sub-head">Seller activity</h3>
-      {activity.length === 0 ? (
-        <p className="dash-note left">No activity yet.</p>
-      ) : (
-        <ol className="ad-timeline">
-          {activity.slice(0, 12).map((a, i) => (
-            <li key={i}>
-              <span className="ad-tl-icon">{a.icon}</span>
-              <div>
-                <span>{a.text}</span>
-                <small>{fmtDateTime(a.at)}</small>
-              </div>
-            </li>
-          ))}
-        </ol>
-      )}
       <div className="ad-modal-actions">
         {s.status === "PENDING" && (
           <>
@@ -375,6 +391,11 @@ function SellerDetails({ db, s, onClose, onAct }) {
               Approve seller
             </GlassButton>
           </>
+        )}
+        {s.status === "REJECTED" && (
+          <GlassButton variant="solid" onClick={() => onAct("approve", s)}>
+            Approve seller
+          </GlassButton>
         )}
         {s.status === "ACTIVE" && (
           <GlassButton className="ad-danger-btn" variant="solid" onClick={() => onAct("block", s)}>
