@@ -1,5 +1,6 @@
 package com.vyapari.config;
 
+import com.vyapari.user.UserRepository;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -13,6 +14,7 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
+import org.springframework.security.web.context.SecurityContextHolderFilter;
 import org.springframework.security.web.context.SecurityContextRepository;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
@@ -43,18 +45,24 @@ public class SecurityConfig {
     }
 
     @Bean
-    SecurityFilterChain filterChain(HttpSecurity http, SecurityContextRepository contextRepo) throws Exception {
+    SecurityFilterChain filterChain(HttpSecurity http, SecurityContextRepository contextRepo, UserRepository users) throws Exception {
         http
             // CSRF protection is switched off to keep development simple.
             // Before going live: turn it on (CookieCsrfTokenRepository) and send the token from React.
             .csrf(AbstractHttpConfigurer::disable)
             .cors(cors -> {})
             .securityContext(c -> c.securityContextRepository(contextRepo))
+            // ends the session of anyone the admin has blocked or deleted
+            .addFilterAfter(new ActiveUserFilter(users), SecurityContextHolderFilter.class)
             .authorizeHttpRequests(auth -> auth
-                .requestMatchers("/api/auth/register", "/api/auth/login", "/error").permitAll()
+                // open to everyone, including people who are not logged in
+                .requestMatchers("/api/health", "/error",
+                        "/api/auth/register", "/api/auth/login", "/api/auth/login/verify",
+                        "/api/auth/forgot-password", "/api/auth/reset-password").permitAll()
                 // ---- add public pages here, e.g. the product list:  .requestMatchers(HttpMethod.GET, "/api/items/**").permitAll()
                 .requestMatchers("/api/admin/**").hasRole("ADMIN")
                 .requestMatchers("/api/delivery/**").hasRole("DELIVERY")
+                .requestMatchers("/api/seller/**").hasRole("SELLER")
                 .requestMatchers("/api/customer/**").hasRole("CUSTOMER")
                 .anyRequest().authenticated())
             .exceptionHandling(e -> e
@@ -70,7 +78,7 @@ public class SecurityConfig {
     @Bean
     CorsConfigurationSource corsConfigurationSource(@Value("${vyapari.cors.origins}") String origins) {
         CorsConfiguration c = new CorsConfiguration();
-        c.setAllowedOrigins(Arrays.asList(origins.split(",")));
+        c.setAllowedOrigins(Arrays.stream(origins.split(",")).map(String::trim).filter(s -> !s.isEmpty()).toList());
         c.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         c.setAllowedHeaders(List.of("*"));
         c.setAllowCredentials(true);   // lets the browser send the session cookie

@@ -1,6 +1,8 @@
 import { useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { login, register } from "../api/auth.js";
+import { login, register, verifyLoginOtp } from "../api/auth.js";
+import OtpStep from "../components/OtpStep.jsx";
+import ForgotPassword from "../components/ForgotPassword.jsx";
 
 // one look for every box, same as before
 const inputStyle = { width: '100%', padding: '14px 18px', borderRadius: '12px', boxSizing: 'border-box', background: 'rgba(255, 255, 255, 0.8)', border: '1px solid rgba(15, 42, 29, 0.2)', color: '#0F2A1D', outline: 'none', fontSize: '15px' };
@@ -27,6 +29,8 @@ export default function SellerLanding() {
   const [registerError, setRegisterError] = useState("");
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
+  const [loginView, setLoginView] = useState("form"); // "form" or "forgot"
+  const [otp, setOtp] = useState(null); // set when a code was emailed and we wait for it
 
   const scrollToLogin = () => {
     loginRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -43,7 +47,12 @@ export default function SellerLanding() {
     setNotice("");
     setBusy(true);
     try {
-      await login({ email: loginData.email, password: loginData.password, role: "seller" });
+      const res = await login({ email: loginData.email, password: loginData.password, role: "seller" });
+      if (res.otpRequired) {
+        // a 6-digit code was emailed: ask for it
+        setOtp(res);
+        return;
+      }
       navigate('/seller-dashboard');
     } catch (err) {
       setLoginError(err.message || "Could not log in");
@@ -176,6 +185,32 @@ export default function SellerLanding() {
               <p style={{ opacity: 0.7, fontSize: '14px' }}>Welcome back! Sign in to access your store dashboard</p>
             </div>
 
+            {otp ? (
+              <OtpStep
+                maskedEmail={otp.maskedEmail}
+                message={otp.message}
+                inputStyle={inputStyle}
+                labelStyle={labelStyle}
+                solidClass="btn btn-solid"
+                onVerify={async (code) => {
+                  await verifyLoginOtp({ email: otp.email, code, role: "seller" });
+                  navigate('/seller-dashboard');
+                }}
+                onResend={() => login({ email: loginData.email, password: loginData.password, role: "seller" })}
+                onBack={() => {
+                  setOtp(null);
+                  setLoginData({ ...loginData, password: "" });
+                }}
+              />
+            ) : loginView === "forgot" ? (
+              <ForgotPassword
+                initialEmail={loginData.email}
+                inputStyle={inputStyle}
+                labelStyle={labelStyle}
+                solidClass="btn btn-solid"
+                onBack={() => setLoginView("form")}
+              />
+            ) : (
             <form onSubmit={handleLoginSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
               <div>
                 <label style={labelStyle}>
@@ -207,6 +242,12 @@ export default function SellerLanding() {
                 />
               </div>
 
+              <p style={{ margin: '-8px 0 0', fontSize: '14px', textAlign: 'right' }}>
+                <button type="button" className="link-btn" onClick={() => { setLoginError(""); setNotice(""); setLoginView("forgot"); }}>
+                  Forgot password?
+                </button>
+              </p>
+
               {notice && <p role="status" style={{ margin: 0, fontSize: '14px', fontWeight: '500', color: '#1f6b3a' }}>{notice}</p>}
               {loginError && <p role="alert" style={{ margin: 0, fontSize: '14px', fontWeight: '500', color: '#b3261e' }}>{loginError}</p>}
 
@@ -214,6 +255,7 @@ export default function SellerLanding() {
                 {busy ? "Please wait..." : "Sign In to Portal (Go to Dashboard)"}
               </button>
             </form>
+            )}
           </section>
         </div>
 

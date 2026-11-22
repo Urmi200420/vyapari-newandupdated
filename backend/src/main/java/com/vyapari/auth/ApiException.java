@@ -2,8 +2,9 @@ package com.vyapari.auth;
 
 import org.springframework.http.HttpStatus;
 
-/** Throw this anywhere to send an error to the front end: new ApiException(HttpStatus.CONFLICT, "message") */
+/** An error that should be shown to the user, with the HTTP status to send back. */
 public class ApiException extends RuntimeException {
+
     private final HttpStatus status;
 
     public ApiException(HttpStatus status, String message) {
@@ -11,5 +12,7 @@ public class ApiException extends RuntimeException {
         this.status = status;
     }
 
-    public HttpStatus getStatus() { return status; }
+    public HttpStatus getStatus() {
+        return status;
+    }
 }

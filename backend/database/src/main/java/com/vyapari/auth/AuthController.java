@@ -1,125 +1,151 @@
-package com.vyapari.controller;
+package com.vyapari.auth;
 
-import com.vyapari.model.Role;
-import com.vyapari.model.User;
-import com.vyapari.repository.UserRepository;
+import com.vyapari.config.AppUserDetailsService;
+import com.vyapari.otp.OtpPurpose;
+import com.vyapari.otp.OtpService;
+import com.vyapari.user.Role;
+import com.vyapari.user.User;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import jakarta.servlet.http.HttpSession;
 import jakarta.validation.Valid;
-import jakarta.validation.constraints.Email;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Size;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.web.context.SecurityContextRepository;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.LinkedHashMap;
+import java.util.Locale;
 import java.util.Map;
 
+/**
+ * POST /api/auth/register
+ * POST /api/auth/login            customers and sellers get a code by email first (two-step login)
+ * POST /api/auth/login/verify     second step: the 6-digit code, then the session starts
+ * POST /api/auth/forgot-password  sends a reset code
+ * POST /api/auth/reset-password   code + new password
+ * GET  /api/auth/me
+ * (Logout is handled in SecurityConfig.)
+ */
 @RestController
 @RequestMapping("/api/auth")
 public class AuthController {
 
-    public record LoginRequest(@NotBlank @Email String email, @NotBlank String password) {}
-
-    public record RegisterRequest(
-            @NotBlank(message = "Name is required") String name,
-            @NotBlank @Email(message = "Enter a valid email") String email,
-            @NotBlank @Size(min = 8, max = 72, message = "Password must be at least 8 characters") String password,
-            Role role,
-            String phone,
-            String shopName,
-            String city) {}
-
     private final AuthenticationManager authManager;
-    private final UserRepository users;
-    private final PasswordEncoder encoder;
     private final SecurityContextRepository contextRepo;
+    private final AuthService service;
+    private final OtpService otp;
+    private final AppUserDetailsService userDetails;
 
-    public AuthController(AuthenticationManager authManager, UserRepository users,
-                          PasswordEncoder encoder, SecurityContextRepository contextRepo) {
+    public AuthController(AuthenticationManager authManager, SecurityContextRepository contextRepo,
+                          AuthService service, OtpService otp, AppUserDetailsService userDetails) {
         this.authManager = authManager;
-        this.users = users;
-        this.encoder = encoder;
         this.contextRepo = contextRepo;
+        this.service = service;
+        this.otp = otp;
+        this.userDetails = userDetails;
     }
 
     @PostMapping("/register")
-    public ResponseEntity<?> register(@Valid @RequestBody RegisterRequest req) {
-        String email = req.email().trim().toLowerCase();
-        if (users.existsByEmail(email)) {
-            return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("error", "Email already registered"));
-        }
-        // Public sign-up creates buyers and sellers only (admins and delivery partners are created by staff)
-        Role role = (req.role() == Role.SELLER) ? Role.SELLER : Role.BUYER;
-
-        if (role == Role.SELLER && (req.shopName() == null || req.shopName().isBlank())) {
-            return ResponseEntity.badRequest().body(Map.of("error", "Shop name is required for sellers"));
-        }
-
-        User u = new User();
-        u.setName(req.name().trim());
-        u.setEmail(email);
-        u.setPassword(encoder.encode(req.password()));
-        u.setRole(role);
-        u.setPhone(req.phone());
-        if (role == Role.SELLER) {
-            u.setShopName(req.shopName().trim());
-            u.setCity(req.city());
-        }
-        u.setApproved(role != Role.SELLER);   // sellers wait for the admin
-        users.save(u);
-        return ResponseEntity.status(HttpStatus.CREATED).body(toDto(u));
+    @ResponseStatus(HttpStatus.CREATED)
+    public UserResponse register(@Valid @RequestBody RegisterRequest req) {
+        return service.register(req);
     }
 
+    /**
+     * Step 1. Wrong password / pending / blocked are refused here, exactly as before.
+     * Customers and sellers then get a code by email (the reply is OtpRequired, no session yet).
+     * Admin and delivery partners log in directly.
+     */
     @PostMapping("/login")
-    public ResponseEntity<?> login(@Valid @RequestBody LoginRequest req,
-                                   HttpServletRequest request, HttpServletResponse response) {
+    public Object login(@Valid @RequestBody LoginRequest req,
+                        HttpServletRequest request, HttpServletResponse response) {
+        String email = req.email().trim().toLowerCase(Locale.ROOT);
+
+        Authentication auth;
         try {
-            Authentication auth = authManager.authenticate(
-                    new UsernamePasswordAuthenticationToken(req.email().trim().toLowerCase(), req.password()));
-
-            User u = users.findByEmail(auth.getName()).orElseThrow();
-            if (Boolean.FALSE.equals(u.getApproved())) {
-                return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                        .body(Map.of("error", "Your shop is still waiting for admin approval."));
-            }
-
-            SecurityContext context = SecurityContextHolder.createEmptyContext();
-            context.setAuthentication(auth);
-            SecurityContextHolder.setContext(context);
-            contextRepo.saveContext(context, request, response);   // creates the session cookie
-
-            return ResponseEntity.ok(toDto(u));
+            auth = authManager.authenticate(UsernamePasswordAuthenticationToken.unauthenticated(email, req.password()));
         } catch (AuthenticationException e) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("error", "Invalid email or password"));
+            throw new ApiException(HttpStatus.UNAUTHORIZED, "Invalid email or password.");
         }
+
+        // password is right: now check role and status (pending / rejected / blocked)
+        User user = service.checkMayLogin(email, req.role());
+
+        boolean needsCode = otp.enabled() && (user.getRole() == Role.CUSTOMER || user.getRole() == Role.SELLER);
+        if (needsCode) {
+            otp.issue(email, OtpPurpose.LOGIN);
+            String masked = otp.mask(email);
+            return new OtpDtos.OtpRequired(true, email, masked, "We sent a 6-digit code to " + masked + ".");
+        }
+        return startSession(auth, user, request, response);
     }
 
+    /** Step 2. Only works for someone who passed step 1 and has the code from their email. */
+    @PostMapping("/login/verify")
+    public UserResponse verify(@Valid @RequestBody OtpDtos.Verify req,
+                               HttpServletRequest request, HttpServletResponse response) {
+        String email = req.email().trim().toLowerCase(Locale.ROOT);
+
+        User user = service.checkMayLogin(email, req.role());   // still allowed in? right door?
+        otp.verify(email, OtpPurpose.LOGIN, req.code());
+
+        UserDetails details = userDetails.loadUserByUsername(email);
+        Authentication auth = UsernamePasswordAuthenticationToken.authenticated(details, null, details.getAuthorities());
+        return startSession(auth, user, request, response);
+    }
+
+    /** Always answers the same way, so nobody can use this to find out which emails are registered. */
+    @PostMapping("/forgot-password")
+    public Map<String, String> forgot(@Valid @RequestBody OtpDtos.Forgot req) {
+        String email = req.email().trim().toLowerCase(Locale.ROOT);
+        if (service.canResetPassword(email)) {
+            try {
+                otp.issue(email, OtpPurpose.RESET);
+            } catch (ApiException e) {
+                if (e.getStatus() != HttpStatus.TOO_MANY_REQUESTS) throw e;
+                // asked again within 30 seconds: the earlier code is still valid, say nothing different
+            }
+        }
+        Map<String, String> body = new LinkedHashMap<>();
+        body.put("message", "If that email is registered, we have sent a 6-digit code to it.");
+        return body;
+    }
+
+    @PostMapping("/reset-password")
+    public Map<String, String> reset(@Valid @RequestBody OtpDtos.Reset req) {
+        String email = req.email().trim().toLowerCase(Locale.ROOT);
+        if (!service.canResetPassword(email)) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Invalid or expired code. Please ask for a new one.");
+        }
+        otp.verify(email, OtpPurpose.RESET, req.code());
+        service.resetPassword(email, req.newPassword());
+        Map<String, String> body = new LinkedHashMap<>();
+        body.put("message", "Password changed. You can log in now.");
+        return body;
+    }
+
+    /** The front end calls this on page load to find out who is really logged in. */
     @GetMapping("/me")
-    public ResponseEntity<?> me(Authentication auth) {
-        return users.findByEmail(auth.getName())
-                .<ResponseEntity<?>>map(u -> ResponseEntity.ok(toDto(u)))
-                .orElse(ResponseEntity.status(HttpStatus.UNAUTHORIZED).build());
+    public UserResponse me(Authentication auth) {
+        User user = service.findActive(auth.getName());
+        if (user == null) throw new ApiException(HttpStatus.UNAUTHORIZED, "Please log in.");
+        return service.toResponse(user);
     }
 
-    @PostMapping("/logout")
-    public ResponseEntity<?> logout(HttpServletRequest request) {
-        HttpSession session = request.getSession(false);
-        if (session != null) session.invalidate();
-        SecurityContextHolder.clearContext();
-        return ResponseEntity.ok(Map.of("message", "Logged out"));
-    }
-
-    private Map<String, Object> toDto(User u) {
-        return Map.of("id", u.getId(), "name", u.getName(), "email", u.getEmail(), "role", u.getRole().name());
+    private UserResponse startSession(Authentication auth, User user, HttpServletRequest request, HttpServletResponse response) {
+        if (request.getSession(false) != null) {
+            request.changeSessionId();   // new session id after login (prevents session fixation)
+        }
+        SecurityContext context = SecurityContextHolder.createEmptyContext();
+        context.setAuthentication(auth);
+        SecurityContextHolder.setContext(context);
+        contextRepo.saveContext(context, request, response);   // creates the session cookie
+        return service.toResponse(user);
     }
 }

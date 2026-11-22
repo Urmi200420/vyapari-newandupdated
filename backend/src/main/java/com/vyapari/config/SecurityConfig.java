@@ -54,7 +54,8 @@ public class SecurityConfig {
             .securityContext(c -> c.securityContextRepository(contextRepo))
             .addFilterAfter(new ActiveUserFilter(users), SecurityContextHolderFilter.class)
             .authorizeHttpRequests(auth -> auth
-                .requestMatchers("/api/health", "/api/auth/register", "/api/auth/login", "/error").permitAll()
+                .requestMatchers("/api/health", "/api/auth/register", "/api/auth/login", "/api/auth/login/verify",
+                    "/api/auth/forgot-password", "/api/auth/reset-password", "/error").permitAll()
                 // public pages go here, e.g.  .requestMatchers(HttpMethod.GET, "/api/items/**").permitAll()
                 .requestMatchers("/api/admin/**").hasRole("ADMIN")
                 .requestMatchers("/api/delivery/**").hasRole("DELIVERY")

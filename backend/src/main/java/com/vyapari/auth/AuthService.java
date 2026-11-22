@@ -98,4 +98,21 @@ public class AuthService {
                 .filter(u -> u.getDeletedAt() == null && u.getStatus() == UserStatus.ACTIVE)
                 .orElse(null);
     }
+
+    /** true if a normal (not deleted) account uses this email */
+    public boolean accountExists(String email) {
+        return users.findByEmail(email.trim().toLowerCase(Locale.ROOT))
+                .filter(u -> u.getDeletedAt() == null)
+                .isPresent();
+    }
+
+    /** Sets a new password. Call it only after the reset code was checked. */
+    @Transactional
+    public void resetPassword(String email, String newPassword) {
+        User user = users.findByEmail(email.trim().toLowerCase(Locale.ROOT))
+                .filter(u -> u.getDeletedAt() == null)
+                .orElseThrow(() -> new ApiException(HttpStatus.BAD_REQUEST, "Invalid or expired code. Please ask for a new one."));
+        user.setPasswordHash(encoder.encode(newPassword));
+        users.save(user);
+    }
 }

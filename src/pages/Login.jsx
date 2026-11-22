@@ -1,7 +1,9 @@
 import { useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import GlassButton from "../components/GlassButton.jsx";
-import { login, register, homeFor } from "../api/auth.js";
+import { login, register, homeFor, verifyLoginOtp } from "../api/auth.js";
+import OtpStep from "../components/OtpStep.jsx";
+import ForgotPassword from "../components/ForgotPassword.jsx";
 
 // Special doors, opened from the sidebar:  /login?role=seller   /login?role=delivery   /login?role=admin
 // canSignup: seller and delivery partners can apply here, admin accounts cannot
@@ -48,6 +50,8 @@ export default function Login() {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
+  const [view, setView] = useState("form"); // "form" or "forgot"
+  const [otp, setOtp] = useState(null); // set when a code was emailed and we wait for it
 
   // on a seller / delivery door the role is fixed; on the normal page the person chooses
   const role = doorRole === "seller" || doorRole === "delivery" ? doorRole : pickedRole;
@@ -80,6 +84,11 @@ export default function Login() {
         // customers can start straight away
       }
       const user = await login({ email, password, ...(doorRole ? { role: doorRole } : {}) });
+      if (user.otpRequired) {
+        // customers and sellers: a code was emailed, ask for it
+        setOtp(user);
+        return;
+      }
       navigate(homeFor(user.role));
     } catch (err) {
       setError(err.message || "Could not reach the server");
@@ -110,7 +119,7 @@ export default function Login() {
         </h1>
         <p className="tagline">{door ? door.tagline : "Buy anything. Sell everything."}</p>
 
-        {canSignup && (
+        {canSignup && !otp && view === "form" && (
           <div className="tabs">
             <button type="button" className={mode === "login" ? "on" : ""} onClick={() => switchMode("login")}>
               Log in
@@ -121,6 +130,23 @@ export default function Login() {
           </div>
         )}
 
+        {otp ? (
+          <OtpStep
+            maskedEmail={otp.maskedEmail}
+            message={otp.message}
+            onVerify={async (code) => {
+              const user = await verifyLoginOtp({ email: otp.email, code, ...(doorRole ? { role: doorRole } : {}) });
+              navigate(homeFor(user.role));
+            }}
+            onResend={() => login({ email, password, ...(doorRole ? { role: doorRole } : {}) })}
+            onBack={() => {
+              setOtp(null);
+              setPassword("");
+            }}
+          />
+        ) : view === "forgot" ? (
+          <ForgotPassword initialEmail={email} onBack={() => setView("form")} />
+        ) : (
         <form onSubmit={submit}>
           {/* only the normal page lets people choose what they are */}
           {mode === "signup" && !door && (
@@ -193,6 +219,14 @@ export default function Login() {
             />
           </label>
 
+          {mode === "login" && doorRole !== "admin" && doorRole !== "delivery" && (
+            <p style={{ margin: "-0.4rem 0 0.8rem", fontSize: "0.86rem", textAlign: "right" }}>
+              <button type="button" className="link-btn" onClick={() => { setError(""); setNotice(""); setView("forgot"); }}>
+                Forgot password?
+              </button>
+            </p>
+          )}
+
           {notice && <p className="success" role="status">{notice}</p>}
           {error && <p className="error" role="alert">{error}</p>}
 
@@ -200,6 +234,7 @@ export default function Login() {
             {busy ? "Please wait..." : mode === "login" ? "Log in" : doorRole === "seller" ? "Send application" : doorRole === "delivery" ? "Send application" : "Create account"}
           </GlassButton>
         </form>
+        )}
 
         {door && (
           <p className="staff-switch">
