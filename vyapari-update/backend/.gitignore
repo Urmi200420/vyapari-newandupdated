@@ -1,0 +1,10 @@
+target/
+.idea/
+*.iml
+.vscode/
+.env
+application-local.properties
+*.log
+
+# private delivery verification documents (identity, licence, RC) - never commit
+private-uploads/

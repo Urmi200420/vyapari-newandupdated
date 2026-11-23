@@ -1,0 +1,85 @@
+/* ==========================================================
+   Universal iOS Liquid Glass Theme for All Buttons & Elements
+   ========================================================== */
+
+/* Target standard buttons, links styled as buttons, circles, and menu toggles */
+button, 
+.btn, 
+.btn-solid, 
+.btn-ghost, 
+.circle, 
+.menu-btn,
+.ios-glass-btn {
+  position: relative;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 8px;
+  padding: 12px 24px;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.15) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.3) !important;
+  box-shadow: 
+    0 8px 32px 0 rgba(0, 0, 0, 0.12),
+    inset 0 1px 1px 0 rgba(255, 255, 255, 0.6),
+    inset 0 -1px 1px 0 rgba(0, 0, 0, 0.1) !important;
+  color: #ffffff !important;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif;
+  font-weight: 500;
+  font-size: 15px;
+  cursor: pointer;
+  outline: none;
+  text-decoration: none;
+  transition: transform 0.25s cubic-bezier(0.25, 1, 0.5, 1), background 0.3s ease, border-color 0.3s ease;
+}
+
+/* Hover effects for all glass action items */
+button:hover, 
+.btn:hover, 
+.btn-solid:hover, 
+.btn-ghost:hover, 
+.circle:hover, 
+.menu-btn:hover,
+.ios-glass-btn:hover {
+  background: rgba(255, 255, 255, 0.25) !important;
+  border-color: rgba(255, 255, 255, 0.5) !important;
+  transform: translateY(-2px) scale(1.02);
+}
+
+/* Active / Click press physics */
+button:active, 
+.btn:active, 
+.btn-solid:active, 
+.btn-ghost:active, 
+.circle:active, 
+.menu-btn:active,
+.ios-glass-btn:active {
+  transform: scale(0.95) !important;
+}
+
+/* Special adjustments for category circles on Home.jsx */
+.circle {
+  flex-direction: column;
+  width: 90px;
+  height: 90px;
+  border-radius: 24px !important;
+  padding: 10px !important;
+}
+
+.circle.on {
+  background: rgba(255, 255, 255, 0.35) !important;
+  border-color: rgba(255, 255, 255, 0.7) !important;
+  box-shadow: 
+    0 10px 30px rgba(0, 0, 0, 0.2),
+    inset 0 1px 2px rgba(255, 255, 255, 0.8) !important;
+}
+
+/* Menu button styling */
+.menu-btn {
+  width: 44px;
+  height: 44px;
+  padding: 0 !important;
+  border-radius: 14px !important;
+}
