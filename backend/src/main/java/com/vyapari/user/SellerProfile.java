@@ -24,6 +24,21 @@ public class SellerProfile {
     @Column(length = 400)
     private String description;
 
+    @Column(name = "owner_name", length = 80)
+    private String ownerName;
+
+    @Column(length = 15)
+    private String gstin;
+
+    @Column(name = "bank_name", length = 80)
+    private String bankName;
+
+    @Column(name = "bank_account_number", length = 20)
+    private String bankAccountNumber;
+
+    @Column(name = "bank_ifsc", length = 11)
+    private String bankIfsc;
+
     @Column(name = "pickup_contact_person", length = 80)
     private String contactPerson;
 
@@ -57,6 +72,16 @@ public class SellerProfile {
     public void setCity(String city) { this.city = city; }
     public String getDescription() { return description; }
     public void setDescription(String description) { this.description = description; }
+    public String getOwnerName() { return ownerName; }
+    public void setOwnerName(String ownerName) { this.ownerName = ownerName; }
+    public String getGstin() { return gstin; }
+    public void setGstin(String gstin) { this.gstin = gstin; }
+    public String getBankName() { return bankName; }
+    public void setBankName(String bankName) { this.bankName = bankName; }
+    public String getBankAccountNumber() { return bankAccountNumber; }
+    public void setBankAccountNumber(String bankAccountNumber) { this.bankAccountNumber = bankAccountNumber; }
+    public String getBankIfsc() { return bankIfsc; }
+    public void setBankIfsc(String bankIfsc) { this.bankIfsc = bankIfsc; }
     public String getContactPerson() { return contactPerson; }
     public void setContactPerson(String contactPerson) { this.contactPerson = contactPerson; }
     public String getContactPhone() { return contactPhone; }

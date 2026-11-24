@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { getItems, addItem, updateItem, deleteItem } from "../api";
+import { getItems, addItem, updateItem, deleteItem } from "../api/sellerItems.js";
 import { formatPrice } from "../data.js";
 import GlassButton from "../components/GlassButton.jsx";
 import ItemForm, { CATS } from "./ItemForm.jsx";
